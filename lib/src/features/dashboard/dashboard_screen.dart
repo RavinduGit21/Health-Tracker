@@ -55,6 +55,13 @@ class DashboardScreen extends ConsumerWidget {
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/goals'),
           ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await ref.read(authRepositoryProvider).signOut();
+              if (context.mounted) context.go('/login');
+            },
+          ),
         ],
       ),
       body: dailyLogAsync.when(

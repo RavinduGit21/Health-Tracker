@@ -55,10 +55,11 @@ class HealthTrackerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'Health Tracker',
       theme: AppTheme.darkTheme,
-      routerConfig: goRouter,
+      routerConfig: router,
       debugShowCheckedModeBanner: false,
     );
   }

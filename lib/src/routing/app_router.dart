@@ -9,48 +9,70 @@ import 'package:health_tracker/src/features/history/statistics_screen.dart';
 import 'package:health_tracker/src/features/onboarding/onboarding_screen.dart';
 import 'package:health_tracker/src/features/weight/weight_screen.dart';
 
-import 'package:health_tracker/src/common_widgets/main_layout.dart';
+import 'package:health_tracker/src/features/authentication/auth_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final goRouter = GoRouter(
-  initialLocation: '/onboarding',
-  routes: [
-    GoRoute(
-      path: '/onboarding',
-      builder: (context, state) => const OnboardingScreen(),
-    ),
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
-    GoRoute(
-      path: '/signup',
-      builder: (context, state) => const SignUpScreen(),
-    ),
-    ShellRoute(
-      builder: (context, state, child) => MainLayout(child: child),
-      routes: [
-        GoRoute(
-          path: '/dashboard',
-          builder: (context, state) => const DashboardScreen(),
-        ),
-        GoRoute(
-          path: '/history',
-          builder: (context, state) => const HistoryScreen(),
-        ),
-        GoRoute(
-          path: '/weight',
-          builder: (context, state) => const WeightScreen(),
-        ),
-      ],
-    ),
-    GoRoute(
-      path: '/goals',
-      builder: (context, state) => const GoalsScreen(),
-    ),
-    GoRoute(
-      path: '/statistics',
-      builder: (context, state) => const StatisticsScreen(),
-    ),
-  ],
-);
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final authRepo = ref.watch(authRepositoryProvider);
+  
+  return GoRouter(
+    initialLocation: '/onboarding',
+    routes: [
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignUpScreen(),
+      ),
+      ShellRoute(
+        builder: (context, state, child) => MainLayout(child: child),
+        routes: [
+          GoRoute(
+            path: '/dashboard',
+            builder: (context, state) => const DashboardScreen(),
+            redirect: (context, state) {
+              final user = authRepo.currentUser;
+              if (user == null) return '/login';
+              return null;
+            },
+          ),
+          GoRoute(
+            path: '/history',
+            builder: (context, state) => const HistoryScreen(),
+            redirect: (context, state) {
+              final user = authRepo.currentUser;
+              if (user == null) return '/login';
+              return null;
+            },
+          ),
+          GoRoute(
+            path: '/weight',
+            builder: (context, state) => const WeightScreen(),
+            redirect: (context, state) {
+              final user = authRepo.currentUser;
+              if (user == null) return '/login';
+              return null;
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/goals',
+        builder: (context, state) => const GoalsScreen(),
+      ),
+      GoRoute(
+        path: '/statistics',
+        builder: (context, state) => const StatisticsScreen(),
+      ),
+    ],
+  );
+});
 
