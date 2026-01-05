@@ -40,7 +40,34 @@ class WeightRepository {
   final Box _box;
   final _supabase = Supabase.instance.client;
 
-  WeightRepository(this._box);
+  WeightRepository(this._box) {
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    _supabase
+        .channel('public:weight_logs')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'weight_logs',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            if (payload.newRecord != null) {
+              final entry = WeightEntry.fromSupabase(payload.newRecord);
+              _box.put(entry.date, entry.toMap());
+            }
+          },
+        )
+        .subscribe();
+  }
 
   Future<void> addWeight(double weight, {String? note}) async {
     final date = DateFormat('yyyy-MM-dd').format(DateTime.now());

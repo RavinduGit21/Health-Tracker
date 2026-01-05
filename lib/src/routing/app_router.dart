@@ -20,6 +20,17 @@ final routerProvider = Provider<GoRouter>((ref) {
   
   return GoRouter(
     initialLocation: '/onboarding',
+    redirect: (context, state) {
+      final user = authRepo.currentUser;
+      final isLoggingIn = state.matchedLocation == '/login' || 
+                         state.matchedLocation == '/signup' || 
+                         state.matchedLocation == '/onboarding';
+
+      if (user != null && isLoggingIn) {
+        return '/dashboard';
+      }
+      return null;
+    },
     routes: [
       GoRoute(
         path: '/onboarding',

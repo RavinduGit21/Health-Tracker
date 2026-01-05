@@ -129,7 +129,34 @@ class DailyLogRepository {
   final Box _box;
   final _supabase = Supabase.instance.client;
 
-  DailyLogRepository(this._box);
+  DailyLogRepository(this._box) {
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    _supabase
+        .channel('public:daily_logs')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'daily_logs',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            if (payload.newRecord != null) {
+              final log = DailyLog.fromSupabase(payload.newRecord);
+              _box.put(log.date, log.toMap());
+            }
+          },
+        )
+        .subscribe();
+  }
 
   String _getTodayKey() {
     return DateFormat('yyyy-MM-dd').format(DateTime.now());
