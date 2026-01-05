@@ -1,0 +1,314 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:health_tracker/src/utils/notification_service.dart';
+
+class LogEntry {
+  final String time;
+  final String description;
+  final int amount; // mL for water, g for sugar
+  final String type; // 'water' or 'sugar'
+
+  LogEntry({required this.time, required this.description, required this.amount, required this.type});
+
+  Map<String, dynamic> toMap() => {'time': time, 'description': description, 'amount': amount, 'type': type};
+  factory LogEntry.fromMap(Map<dynamic, dynamic> map) => LogEntry(
+    time: map['time'] ?? '',
+    description: map['description'] ?? '',
+    amount: map['amount'] ?? 0,
+    type: map['type'] ?? 'water',
+  );
+}
+
+class DailyLog {
+  final String date;
+  final int waterIntake;
+  final int sugarIntake;
+  final bool workoutDone;
+  final int caloriesBurned;
+  final String workoutNotes;
+  final String notes;
+  final bool sugarCutCompleted;
+  final List<LogEntry> entries;
+
+  DailyLog({
+    required this.date, 
+    required this.waterIntake, 
+    required this.sugarIntake,
+    this.workoutDone = false,
+    this.caloriesBurned = 0,
+    this.workoutNotes = '',
+    this.notes = '',
+    this.sugarCutCompleted = false,
+    this.entries = const [],
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'date': date,
+      'waterIntake': waterIntake,
+      'sugarIntake': sugarIntake,
+      'workoutDone': workoutDone,
+      'caloriesBurned': caloriesBurned,
+      'workoutNotes': workoutNotes,
+      'notes': notes,
+      'sugarCutCompleted': sugarCutCompleted,
+      'entries': entries.map((e) => e.toMap()).toList(),
+    };
+  }
+
+  factory DailyLog.fromMap(Map<dynamic, dynamic> map) {
+    return DailyLog(
+      date: map['date'] ?? '',
+      waterIntake: map['waterIntake'] ?? 0,
+      sugarIntake: map['sugarIntake'] ?? 0,
+      workoutDone: map['workoutDone'] ?? false,
+      caloriesBurned: map['caloriesBurned'] ?? 0,
+      workoutNotes: map['workoutNotes'] ?? '',
+      notes: map['notes'] ?? '',
+      sugarCutCompleted: map['sugarCutCompleted'] ?? false,
+      entries: (map['entries'] as List?)?.map((e) => LogEntry.fromMap(e)).toList() ?? [],
+    );
+  }
+  
+  DailyLog copyWith({
+    int? waterIntake, 
+    int? sugarIntake, 
+    bool? workoutDone,
+    int? caloriesBurned,
+    String? workoutNotes,
+    String? notes,
+    bool? sugarCutCompleted,
+    List<LogEntry>? entries,
+  }) {
+    return DailyLog(
+      date: date,
+      waterIntake: waterIntake ?? this.waterIntake,
+      sugarIntake: sugarIntake ?? this.sugarIntake,
+      workoutDone: workoutDone ?? this.workoutDone,
+      caloriesBurned: caloriesBurned ?? this.caloriesBurned,
+      workoutNotes: workoutNotes ?? this.workoutNotes,
+      notes: notes ?? this.notes,
+      sugarCutCompleted: sugarCutCompleted ?? this.sugarCutCompleted,
+      entries: entries ?? this.entries,
+    );
+  }
+}
+
+class DailyLogRepository {
+  final Box _box;
+
+  DailyLogRepository(this._box);
+
+  String _getTodayKey() {
+    return DateFormat('yyyy-MM-dd').format(DateTime.now());
+  }
+
+  DailyLog getTodayLog() {
+    final key = _getTodayKey();
+    final data = _box.get(key);
+    if (data == null) {
+      return DailyLog(date: key, waterIntake: 0, sugarIntake: 0);
+    }
+    return DailyLog.fromMap(data);
+  }
+
+  Future<void> addWater(int amount, {String description = "Water"}) async {
+    final currentLog = getTodayLog();
+    final newEntry = LogEntry(
+      time: DateFormat.jm().format(DateTime.now()),
+      description: description,
+      amount: amount,
+      type: 'water',
+    );
+    final newLog = currentLog.copyWith(
+      waterIntake: currentLog.waterIntake + amount,
+      entries: [...currentLog.entries, newEntry],
+    );
+    await _box.put(_getTodayKey(), newLog.toMap());
+    _updateWidget(newLog);
+    // Intelligent Reminder: Reset the schedule so we don't nag immediately
+    await NotificationService().scheduleReminders();
+  }
+
+  Future<void> addSugar(int amount, {String description = "Sugar"}) async {
+    final currentLog = getTodayLog();
+    final newEntry = LogEntry(
+      time: DateFormat.jm().format(DateTime.now()),
+      description: description,
+      amount: amount,
+      type: 'sugar',
+    );
+    final newLog = currentLog.copyWith(
+      sugarIntake: currentLog.sugarIntake + amount,
+      entries: [...currentLog.entries, newEntry],
+    );
+    await _box.put(_getTodayKey(), newLog.toMap());
+    _updateWidget(newLog);
+  }
+
+  Future<void> updateWorkout({bool? done, int? calories, String? notes}) async {
+    final currentLog = getTodayLog();
+    final newLog = currentLog.copyWith(
+      workoutDone: done ?? currentLog.workoutDone,
+      caloriesBurned: calories ?? currentLog.caloriesBurned,
+      workoutNotes: notes ?? currentLog.workoutNotes,
+    );
+    await _box.put(_getTodayKey(), newLog.toMap());
+  }
+
+  Future<void> updateNotes(String notes) async {
+    final currentLog = getTodayLog();
+    final newLog = currentLog.copyWith(notes: notes);
+    await _box.put(_getTodayKey(), newLog.toMap());
+  }
+
+  Future<void> toggleSugarCut(bool value) async {
+    final currentLog = getTodayLog();
+    final newLog = currentLog.copyWith(sugarCutCompleted: value);
+    await _box.put(_getTodayKey(), newLog.toMap());
+  }
+
+  int getSugarStreak() {
+    int streak = 0;
+    final now = DateTime.now();
+    for (int i = 0; i < 365; i++) {
+      final date = now.subtract(Duration(days: i));
+      final key = DateFormat('yyyy-MM-dd').format(date);
+      final data = _box.get(key);
+      if (data == null) break;
+      final log = DailyLog.fromMap(data);
+      if (!log.sugarCutCompleted) break;
+      streak++;
+    }
+    return streak;
+  }
+
+  Map<String, dynamic> getChallengeProgress(String? startDate) {
+    if (startDate == null || startDate.isEmpty) {
+      return {'active': false};
+    }
+
+    final start = DateFormat('yyyy-MM-dd').parse(startDate);
+    final now = DateTime.now();
+    final diffDays = now.difference(start).inDays;
+    final dayIndex = diffDays + 1;
+
+    int completed = 0;
+    for (int i = 0; i < 7; i++) {
+       final d = start.add(Duration(days: i));
+       final key = DateFormat('yyyy-MM-dd').format(d);
+       final data = _box.get(key);
+       if (data != null) {
+         final log = DailyLog.fromMap(data);
+         if (log.sugarCutCompleted) completed++;
+       }
+    }
+
+    return {
+      'active': true,
+      'dayIndex': dayIndex,
+      'completed': completed,
+      'total': 7,
+    };
+  }
+
+  Future<void> updateWidgetWithCurrentData() async {
+    final currentLog = getTodayLog();
+    await _updateWidget(currentLog);
+  }
+
+  Future<void> _updateWidget(DailyLog log) async {
+    /*
+    try {
+      await HomeWidget.saveWidgetData<int>('water_current', log.waterIntake);
+      await HomeWidget.saveWidgetData<int>('sugar_current', log.sugarIntake);
+      // Try updating with the simple name
+      await HomeWidget.updateWidget(
+          name: 'HealthWidgetProvider', iOSName: 'HealthWidget');
+    } catch (e) {
+      debugPrint("Error updating widget: $e");
+    }
+    */
+  }
+  
+  List<DailyLog> getLast7Days() {
+    final List<DailyLog> logs = [];
+    final now = DateTime.now();
+    for (int i = 6; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      final key = DateFormat('yyyy-MM-dd').format(date);
+      final data = _box.get(key);
+      if (data != null) {
+        logs.add(DailyLog.fromMap(data));
+      } else {
+        logs.add(DailyLog(date: key, waterIntake: 0, sugarIntake: 0));
+      }
+    }
+    return logs;
+  }
+
+
+  List<DailyLog> getAllLogs() {
+    final List<DailyLog> logs = [];
+    for (var key in _box.keys) {
+       final data = _box.get(key);
+       if (data != null) {
+         logs.add(DailyLog.fromMap(data));
+       }
+    }
+    // Sort by date descending (newest first)
+    logs.sort((a, b) => b.date.compareTo(a.date));
+    return logs;
+  }
+
+  Future<void> updateLog(DailyLog log) async {
+    await _box.put(log.date, log.toMap());
+    // If it's today's log, update the widget too
+    if (log.date == _getTodayKey()) {
+      _updateWidget(log);
+    }
+  }
+
+  Future<void> deleteLog(String date) async {
+    await _box.delete(date);
+    // If it's today's log, clear the widget or set to 0? 
+    // Maybe set to 0 if deleted.
+    if (date == _getTodayKey()) {
+      _updateWidget(DailyLog(date: date, waterIntake: 0, sugarIntake: 0));
+    }
+  }
+}
+
+final dailyLogRepositoryProvider = Provider<DailyLogRepository>((ref) {
+  final box = Hive.box('daily_logs');
+  return DailyLogRepository(box);
+});
+
+final todayLogProvider = StreamProvider.autoDispose<DailyLog>((ref) async* {
+  final repo = ref.watch(dailyLogRepositoryProvider);
+  final box = Hive.box('daily_logs');
+  
+  // Emit initial value
+  yield repo.getTodayLog();
+  
+  // Watch for changes
+  await for (final event in box.watch(key: repo._getTodayKey())) {
+    yield repo.getTodayLog();
+  }
+});
+
+final last7DaysLogsProvider = FutureProvider.autoDispose<List<DailyLog>>((ref) async {
+  final repo = ref.watch(dailyLogRepositoryProvider);
+  return repo.getLast7Days();
+});
+
+final allLogsProvider = StreamProvider.autoDispose<List<DailyLog>>((ref) async* {
+  final repo = ref.watch(dailyLogRepositoryProvider);
+  final box = Hive.box('daily_logs');
+  
+  yield repo.getAllLogs();
+    await for (final _ in box.watch()) {
+      yield repo.getAllLogs();
+    }
+});

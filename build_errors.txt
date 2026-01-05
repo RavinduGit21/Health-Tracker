@@ -1,0 +1,33 @@
+Analyzing Health Tracker...                                     
+
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\constants\app_colors.dart:14:42 - deprecated_member_use
+   info - 'background' is deprecated and shouldn't be used. Use surface instead. This feature was deprecated after v3.18.0-0.1.pre - lib\src\constants\app_theme.dart:15:9 - deprecated_member_use
+warning - Unused import: 'package:flutter/foundation.dart' - lib\src\features\dashboard\dashboard_repository.dart:1:8 - unused_import
+warning - The value of the local variable 'event' isn't used - lib\src\features\dashboard\dashboard_repository.dart:297:20 - unused_local_variable
+warning - The value of the local variable 'event' isn't used - lib\src\features\dashboard\dashboard_repository.dart:313:20 - unused_local_variable
+warning - Unused import: 'package:health_tracker/src/features/weight/weight_screen.dart' - lib\src\features\dashboard\dashboard_screen.dart:11:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\dashboard\dashboard_screen.dart:264:67 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\dashboard\dashboard_screen.dart:314:34 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\dashboard\dashboard_screen.dart:314:66 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\dashboard\dashboard_screen.dart:316:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\dashboard\dashboard_screen.dart:412:38 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\dashboard\dashboard_screen.dart:506:24 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\dashboard\dashboard_screen.dart:508:43 - deprecated_member_use
+warning - Unused import: 'package:flutter/material.dart' - lib\src\features\goals\goals_repository.dart:1:8 - unused_import
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\src\features\goals\goals_screen.dart:77:21 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\src\features\goals\goals_screen.dart:78:21 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\src\features\goals\goals_screen.dart:87:21 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\src\features\goals\goals_screen.dart:88:21 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\goals\goals_screen.dart:282:28 - deprecated_member_use
+warning - Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' - lib\src\features\history\daily_detail_screen.dart:2:8 - unused_import
+warning - Unused import: 'package:intl/intl.dart' - lib\src\features\history\daily_detail_screen.dart:5:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\history\statistics_screen.dart:97:28 - deprecated_member_use
+warning - The value of the local variable 'isLow' isn't used - lib\src\features\weight\weight_screen.dart:26:17 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\weight\weight_screen.dart:77:38 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\weight\weight_screen.dart:79:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\src\features\weight\weight_screen.dart:181:38 - deprecated_member_use
+warning - Unused import: 'package:flutter/material.dart' - lib\src\routing\app_router.dart:1:8 - unused_import
+warning - The value of the local variable 'platformChannelSpecifics' isn't used - lib\src\utils\notification_service.dart:35:31 - unused_local_variable
+warning - Unused import: 'dart:io' - lib\src\utils\report_service.dart:1:8 - unused_import
+
+29 issues found. (ran in 3.3s)

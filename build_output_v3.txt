@@ -1,0 +1,91 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 67.0.0 (92.0.0 available)
+  analyzer 6.4.1 (9.0.0 available)
+  build 2.4.1 (4.0.3 available)
+  build_config 1.1.2 (1.2.0 available)
+  build_resolvers 2.4.2 (3.0.4 available)
+  build_runner 2.4.13 (2.10.4 available)
+  build_runner_core 7.3.2 (9.3.2 available)
+  characters 1.4.0 (1.4.1 available)
+  dart_style 2.3.6 (3.1.3 available)
+  fl_chart 1.0.0 (1.1.1 available)
+  flutter_lints 5.0.0 (6.0.0 available)
+  flutter_local_notifications 17.2.4 (19.5.0 available)
+  flutter_local_notifications_linux 4.0.1 (6.0.0 available)
+  flutter_local_notifications_platform_interface 7.2.0 (9.1.0 available)
+  flutter_riverpod 3.0.3 (3.1.0 available)
+  introduction_screen 3.1.17 (4.0.0 available)
+  lints 5.1.1 (6.0.0 available)
+  matcher 0.12.17 (0.12.18 available)
+  material_color_utilities 0.11.1 (0.13.0 available)
+  path_provider 2.1.4 (2.1.5 available)
+  riverpod 3.0.3 (3.1.0 available)
+  shared_preferences 2.3.2 (2.5.4 available)
+  shelf_web_socket 2.0.1 (3.0.0 available)
+  source_gen 1.5.0 (4.1.1 available)
+  source_helper 1.3.5 (1.3.9 available)
+  test 1.26.3 (1.28.0 available)
+  test_api 0.7.7 (0.7.8 available)
+  test_core 0.6.12 (0.6.14 available)
+  timezone 0.9.4 (0.10.1 available)
+Got dependencies!
+29 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleDebug'...                          
+Checking the license for package NDK (Side by side) 26.1.10909125 in C:\Users\User\AppData\Local\Android\sdk\licenses
+License for package NDK (Side by side) 26.1.10909125 accepted.
+Preparing "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125".
+"Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" ready.
+Installing NDK (Side by side) 26.1.10909125 in C:\Users\User\AppData\Local\Android\sdk\ndk\26.1.10909125
+"Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" complete.
+"Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" finished.
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+3 warnings
+The message received from the daemon indicates that the daemon has disappeared.
+Build request sent: Build{id=c7b9b734-1e12-4823-8bac-0705d8c2c4a3, currentDir=C:\Users\User\Desktop\Health Tracker\android}
+Attempting to read last messages from the daemon log...
+Daemon pid: 23464
+  log file: C:\Users\User\.gradle\daemon\8.7\daemon-23464.out.log
+----- Last  20 lines from daemon log file - daemon-23464.out.log -----
+2026-01-04T04:10:13.316+0530 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] Command execution: completed DaemonCommandExecution[command = Build{id=c7b9b734-1e12-4823-8bac-0705d8c2c4a3, currentDir=C:\Users\User\Desktop\Health Tracker\android}, connection = DefaultDaemonConnection: socket connection from /127.0.0.1:7816 to /127.0.0.1:7817]
+2026-01-04T04:10:13.316+0530 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] resetting idle timer
+2026-01-04T04:10:13.316+0530 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] Marking daemon stopped due to command completed and stop requested. The daemon is running a build: false
+2026-01-04T04:10:13.320+0530 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] daemon has stopped.
+2026-01-04T04:10:13.320+0530 [DEBUG] [org.gradle.launcher.daemon.server.Daemon] stop() called on daemon
+2026-01-04T04:10:13.320+0530 [INFO] [org.gradle.launcher.daemon.server.Daemon] Stop requested. Daemon is removing its presence from the registry...
+2026-01-04T04:10:13.321+0530 [DEBUG] [org.gradle.launcher.daemon.server.DaemonRegistryUpdater] Removing our presence to clients, eg. removing this address from the registry: [8bc047af-e2a1-4768-8d60-daf559f7d615 port:7816, addresses:[localhost/127.0.0.1]]
+2026-01-04T04:10:13.321+0530 [DEBUG] [org.gradle.launcher.daemon.registry.PersistentDaemonRegistry] Removing daemon address: [8bc047af-e2a1-4768-8d60-daf559f7d615 port:7816, addresses:[localhost/127.0.0.1]]
+2026-01-04T04:10:13.328+0530 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Waiting to acquire exclusive lock on daemon addresses registry.
+2026-01-04T04:10:13.330+0530 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Lock acquired on daemon addresses registry.
+2026-01-04T04:10:13.335+0530 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Releasing lock on daemon addresses registry.
+2026-01-04T04:10:13.335+0530 [DEBUG] [org.gradle.launcher.daemon.server.DaemonRegistryUpdater] Address removed from registry.
+2026-01-04T04:10:13.336+0530 [WARN] [org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler] Unable to execute command Build{id=c7b9b734-1e12-4823-8bac-0705d8c2c4a3, currentDir=C:\Users\User\Desktop\Health Tracker\android} from socket connection from /127.0.0.1:7816 to /127.0.0.1:7817. Dispatching the failure to the daemon client
+java.lang.OutOfMemoryError: Metaspace
+2026-01-04T04:10:13.337+0530 [DEBUG] [org.gradle.launcher.daemon.server.SynchronizedDispatchConnection] thread 29: dispatching Failure[value=java.lang.OutOfMemoryError: Metaspace]
+2026-01-04T04:10:13.717+0530 [DEBUG] [org.gradle.launcher.daemon.server.exec.CleanUpVirtualFileSystemAfterBuild] Cleaning virtual file system after build finished
+2026-01-04T04:10:13.746+0530 [DEBUG] [org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler] Finishing executing command: Build{id=c7b9b734-1e12-4823-8bac-0705d8c2c4a3, currentDir=C:\Users\User\Desktop\Health Tracker\android}
+2026-01-04T04:10:13.747+0530 [DEBUG] [org.gradle.launcher.daemon.server.SynchronizedDispatchConnection] thread 29: stopping connection
+2026-01-04T04:10:13.751+0530 [DEBUG] [org.gradle.internal.remote.internal.inet.SocketConnection] Discarding EOFException: java.io.EOFException
+2026-01-04T04:10:13.751+0530 [DEBUG] [org.gradle.launcher.daemon.server.SynchronizedDispatchConnection] thread 30: received null
+----- End of the daemon log -----
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+Running Gradle task 'assembleDebug'...                            591.2s
+Gradle task assembleDebug failed with exit code 1

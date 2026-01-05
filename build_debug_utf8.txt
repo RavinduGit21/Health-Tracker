@@ -1,0 +1,204 @@
+﻿
+flutter : Support for 
+Android x86 targets will be 
+removed in the next stable 
+release after 3.27. See https
+://github.com/flutter/flutter
+/issues/157543 for details.
+At line:1 char:1
++ flutter build apk --debug 
+> build_debug.log 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (Support  
+   for And...43 for detail   
+ s.:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+Running Gradle task 'assembleDebug'...                          
+Your project is configured 
+with Android NDK 
+26.3.11579264, but the 
+following plugin(s) depend 
+on a different Android NDK 
+version:
+- 
+flutter_keyboard_visibility 
+requires Android NDK 
+27.0.12077973
+- 
+flutter_local_notifications 
+requires Android NDK 
+27.0.12077973
+- path_provider_android 
+requires Android NDK 
+27.0.12077973
+- shared_preferences_android 
+requires Android NDK 
+27.0.12077973
+Fix this issue by using the 
+highest Android NDK version 
+(they are backward 
+compatible).
+Add the following to 
+C:\Users\User\Desktop\Health 
+Tracker\android\app\build.gra
+dle.kts:
+
+    android {
+        ndkVersion = 
+"27.0.12077973"
+        ...
+    }
+
+lib/src/features/onboarding/o
+nboarding_screen.dart:64:71: 
+Error: Expected ',' before 
+this.
+      titleTextStyle: 
+TextStyle(fontSize: 28.0, 
+fontWeight: FontWeight.700),
+                             
+                             
+            ^^^^
+lib/src/features/onboarding/o
+nboarding_screen.dart:64:32: 
+Error: Too many positional 
+arguments: 0 allowed, but 1 
+found.
+Try removing the extra 
+positional arguments.
+      titleTextStyle: 
+TextStyle(fontSize: 28.0, 
+fontWeight: FontWeight.700),
+                             
+  ^
+../../AppData/Local/flutter/p
+ackages/flutter/lib/src/paint
+ing/text_style.dart:480:9: 
+Context: Found this 
+candidate, but the arguments 
+don't match.
+  const TextStyle({
+        ^^^^^^^^^
+../../AppData/Local/Pub/Cache
+/hosted/pub.dev/fl_chart-1.1.
+0/lib/src/chart/base/custom_i
+nteractive_viewer.dart:419:9:
+ Error: The method 
+'translateByDouble' isn't 
+defined for the class 
+'Matrix4'.
+ - 'Matrix4' is from 'package
+:vector_math/vector_math_64.d
+art' ('../../AppData/Local/Pu
+b/Cache/hosted/pub.dev/vector
+_math-2.1.4/lib/vector_math_6
+4.dart').
+Try correcting the name to 
+the name of an existing 
+method, or defining a method 
+named 'translateByDouble'.
+      ..translateByDouble(
+        ^^^^^^^^^^^^^^^^^
+../../AppData/Local/Pub/Cache
+/hosted/pub.dev/fl_chart-1.1.
+0/lib/src/chart/base/custom_i
+nteractive_viewer.dart:534:9:
+ Error: The method 
+'scaleByDouble' isn't 
+defined for the class 
+'Matrix4'.
+ - 'Matrix4' is from 'package
+:vector_math/vector_math_64.d
+art' ('../../AppData/Local/Pu
+b/Cache/hosted/pub.dev/vector
+_math-2.1.4/lib/vector_math_6
+4.dart').
+Try correcting the name to 
+the name of an existing 
+method, or defining a method 
+named 'scaleByDouble'.
+      ..scaleByDouble(clamped
+Scale, clampedScale, 
+clampedScale, 1);
+        ^^^^^^^^^^^^^
+../../AppData/Local/Pub/Cache
+/hosted/pub.dev/fl_chart-1.1.
+0/lib/src/chart/base/custom_i
+nteractive_viewer.dart:1114:7
+: Error: The method 
+'translateByDouble' isn't 
+defined for the class 
+'Matrix4'.
+ - 'Matrix4' is from 'package
+:vector_math/vector_math_64.d
+art' ('../../AppData/Local/Pu
+b/Cache/hosted/pub.dev/vector
+_math-2.1.4/lib/vector_math_6
+4.dart').
+Try correcting the name to 
+the name of an existing 
+method, or defining a method 
+named 'translateByDouble'.
+    ..translateByDouble(rect.
+size.width / 2, 
+rect.size.height / 2, 0, 1)
+      ^^^^^^^^^^^^^^^^^
+../../AppData/Local/Pub/Cache
+/hosted/pub.dev/fl_chart-1.1.
+0/lib/src/chart/base/custom_i
+nteractive_viewer.dart:1116:7
+: Error: The method 
+'translateByDouble' isn't 
+defined for the class 
+'Matrix4'.
+ - 'Matrix4' is from 'package
+:vector_math/vector_math_64.d
+art' ('../../AppData/Local/Pu
+b/Cache/hosted/pub.dev/vector
+_math-2.1.4/lib/vector_math_6
+4.dart').
+Try correcting the name to 
+the name of an existing 
+method, or defining a method 
+named 'translateByDouble'.
+    ..translateByDouble(-rect
+.size.width / 2, 
+-rect.size.height / 2, 0, 1);
+      ^^^^^^^^^^^^^^^^^
+Target 
+kernel_snapshot_program 
+failed: Exception
+
+
+FAILURE: Build failed with 
+an exception.
+
+* What went wrong:
+Execution failed for task ':a
+pp:compileFlutterBuildDebug'.
+> Process 'command 'C:\Users\
+User\AppData\Local\flutter\bi
+n\flutter.bat'' finished 
+with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace 
+option to get the stack 
+trace.
+> Run with --info or --debug 
+option to get more log 
+output.
+> Run with --scan to get 
+full insights.
+> Get more help at 
+https://help.gradle.org.
+
+BUILD FAILED in 16s
+Running Gradle task 'assembleDebug'...                             16.9s
+Gradle task assembleDebug 
+failed with exit code 1
