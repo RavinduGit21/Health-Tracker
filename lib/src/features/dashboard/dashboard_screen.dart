@@ -10,6 +10,8 @@ import 'package:health_tracker/src/features/nutrition/food_search_sheet.dart';
 import 'package:health_tracker/src/features/weight/weight_repository.dart';
 import 'package:health_tracker/src/features/weight/weight_screen.dart';
 
+import 'package:health_tracker/src/features/authentication/auth_repository.dart';
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -17,13 +19,38 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dailyLogAsync = ref.watch(todayLogProvider);
     final goalsState = ref.watch(goalsProvider);
-    final weekLogsAsync = ref.watch(last7DaysLogsProvider);
     final latestWeight = ref.watch(latestWeightProvider);
+    final authRepo = ref.watch(authRepositoryProvider);
+    final user = authRepo.currentUser;
+    final isAdmin = authRepo.isAdmin(user?.email);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Today's Health"),
+        title: Row(
+          children: [
+            const Text("Today's Health"),
+            if (isAdmin) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text("ADMIN", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ],
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            onPressed: () {
+              ref.read(dailyLogRepositoryProvider).syncRemote();
+              ref.read(weightRepositoryProvider).syncRemote();
+               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Syncing with cloud...")));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/goals'),

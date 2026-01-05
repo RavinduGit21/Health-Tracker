@@ -9,8 +9,17 @@ import 'package:health_tracker/src/routing/app_router.dart';
 import 'package:health_tracker/src/features/onboarding/onboarding_repository.dart';
 import 'package:health_tracker/src/utils/notification_service.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:health_tracker/src/constants/supabase_config.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+  );
   
   // Initialize Hive
   await Hive.initFlutter();

@@ -71,6 +71,35 @@ class DailyLog {
     );
   }
   
+  Map<String, dynamic> toSupabase(String userId) {
+    return {
+      'user_id': userId,
+      'date': date,
+      'water_intake': waterIntake,
+      'sugar_intake': sugarIntake,
+      'workout_done': workoutDone,
+      'calories_burned': caloriesBurned,
+      'workout_notes': workoutNotes,
+      'notes': notes,
+      'sugar_cut_completed': sugarCutCompleted,
+      'entries': entries.map((e) => e.toMap()).toList(),
+    };
+  }
+
+  factory DailyLog.fromSupabase(Map<String, dynamic> map) {
+    return DailyLog(
+      date: map['date'] ?? '',
+      waterIntake: map['water_intake'] ?? 0,
+      sugarIntake: map['sugar_intake'] ?? 0,
+      workoutDone: map['workout_done'] ?? false,
+      caloriesBurned: map['calories_burned'] ?? 0,
+      workoutNotes: map['workout_notes'] ?? '',
+      notes: map['notes'] ?? '',
+      sugarCutCompleted: map['sugar_cut_completed'] ?? false,
+      entries: (map['entries'] as List?)?.map((e) => LogEntry.fromMap(e)).toList() ?? [],
+    );
+  }
+
   DailyLog copyWith({
     int? waterIntake, 
     int? sugarIntake, 
@@ -97,6 +126,7 @@ class DailyLog {
 
 class DailyLogRepository {
   final Box _box;
+  final _supabase = Supabase.instance.client;
 
   DailyLogRepository(this._box);
 
@@ -125,9 +155,8 @@ class DailyLogRepository {
       waterIntake: currentLog.waterIntake + amount,
       entries: [...currentLog.entries, newEntry],
     );
-    await _box.put(_getTodayKey(), newLog.toMap());
+    await _saveLog(newLog);
     _updateWidget(newLog);
-    // Intelligent Reminder: Reset the schedule so we don't nag immediately
     await NotificationService().scheduleReminders();
   }
 
@@ -143,8 +172,46 @@ class DailyLogRepository {
       sugarIntake: currentLog.sugarIntake + amount,
       entries: [...currentLog.entries, newEntry],
     );
-    await _box.put(_getTodayKey(), newLog.toMap());
+    await _saveLog(newLog);
     _updateWidget(newLog);
+  }
+
+  Future<void> _saveLog(DailyLog log) async {
+    // Save to Hive locally first
+    await _box.put(log.date, log.toMap());
+    
+    // Sync to Supabase if logged in
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      try {
+        await _supabase.from('daily_logs').upsert(
+          log.toSupabase(user.id),
+          onConflict: 'user_id, date',
+        );
+      } catch (e) {
+        print("Supabase sync failed: $e");
+        // We could flag this log for retry later
+      }
+    }
+  }
+
+  Future<void> syncRemote() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final data = await _supabase
+          .from('daily_logs')
+          .select()
+          .eq('user_id', user.id);
+      
+      for (var row in data) {
+        final log = DailyLog.fromSupabase(row);
+        await _box.put(log.date, log.toMap());
+      }
+    } catch (e) {
+      print("Supabase pull failed: $e");
+    }
   }
 
   Future<void> updateWorkout({bool? done, int? calories, String? notes}) async {
@@ -154,21 +221,23 @@ class DailyLogRepository {
       caloriesBurned: calories ?? currentLog.caloriesBurned,
       workoutNotes: notes ?? currentLog.workoutNotes,
     );
-    await _box.put(_getTodayKey(), newLog.toMap());
+    await _saveLog(newLog);
   }
 
   Future<void> updateNotes(String notes) async {
     final currentLog = getTodayLog();
     final newLog = currentLog.copyWith(notes: notes);
-    await _box.put(_getTodayKey(), newLog.toMap());
+    await _saveLog(newLog);
   }
 
   Future<void> toggleSugarCut(bool value) async {
     final currentLog = getTodayLog();
     final newLog = currentLog.copyWith(sugarCutCompleted: value);
-    await _box.put(_getTodayKey(), newLog.toMap());
+    await _saveLog(newLog);
   }
-
+  
+  // Rest of the methods updated to use _saveLog where applicable...
+  
   int getSugarStreak() {
     int streak = 0;
     final now = DateTime.now();
@@ -218,19 +287,7 @@ class DailyLogRepository {
     await _updateWidget(currentLog);
   }
 
-  Future<void> _updateWidget(DailyLog log) async {
-    /*
-    try {
-      await HomeWidget.saveWidgetData<int>('water_current', log.waterIntake);
-      await HomeWidget.saveWidgetData<int>('sugar_current', log.sugarIntake);
-      // Try updating with the simple name
-      await HomeWidget.updateWidget(
-          name: 'HealthWidgetProvider', iOSName: 'HealthWidget');
-    } catch (e) {
-      debugPrint("Error updating widget: $e");
-    }
-    */
-  }
+  Future<void> _updateWidget(DailyLog log) async {}
   
   List<DailyLog> getLast7Days() {
     final List<DailyLog> logs = [];
@@ -248,23 +305,20 @@ class DailyLogRepository {
     return logs;
   }
 
-
   List<DailyLog> getAllLogs() {
     final List<DailyLog> logs = [];
     for (var key in _box.keys) {
        final data = _box.get(key);
-       if (data != null) {
+       if (data != null && data is Map) {
          logs.add(DailyLog.fromMap(data));
        }
     }
-    // Sort by date descending (newest first)
     logs.sort((a, b) => b.date.compareTo(a.date));
     return logs;
   }
 
   Future<void> updateLog(DailyLog log) async {
-    await _box.put(log.date, log.toMap());
-    // If it's today's log, update the widget too
+    await _saveLog(log);
     if (log.date == _getTodayKey()) {
       _updateWidget(log);
     }
@@ -272,8 +326,10 @@ class DailyLogRepository {
 
   Future<void> deleteLog(String date) async {
     await _box.delete(date);
-    // If it's today's log, clear the widget or set to 0? 
-    // Maybe set to 0 if deleted.
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      await _supabase.from('daily_logs').delete().eq('user_id', user.id).eq('date', date);
+    }
     if (date == _getTodayKey()) {
       _updateWidget(DailyLog(date: date, waterIntake: 0, sugarIntake: 0));
     }
@@ -289,11 +345,10 @@ final todayLogProvider = StreamProvider.autoDispose<DailyLog>((ref) async* {
   final repo = ref.watch(dailyLogRepositoryProvider);
   final box = Hive.box('daily_logs');
   
-  // Emit initial value
   yield repo.getTodayLog();
   
-  // Watch for changes
-  await for (final event in box.watch(key: repo._getTodayKey())) {
+  final stream = box.watch(key: repo._getTodayKey());
+  await for (final _ in stream) {
     yield repo.getTodayLog();
   }
 });
@@ -308,7 +363,8 @@ final allLogsProvider = StreamProvider.autoDispose<List<DailyLog>>((ref) async* 
   final box = Hive.box('daily_logs');
   
   yield repo.getAllLogs();
-    await for (final _ in box.watch()) {
-      yield repo.getAllLogs();
-    }
+  await for (final _ in box.watch()) {
+    yield repo.getAllLogs();
+  }
 });
+

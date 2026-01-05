@@ -1,29 +1,37 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthRepository {
-  // In a real app, this would interact with Firebase or an API
+  final _supabase = Supabase.instance.client;
+
+  bool isAdmin(String? email) {
+    return email == 'ravindushehara1234@gmail.com';
+  }
+
   Future<void> signIn(String email, String password) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
-    if (email == 'user@example.com' && password == 'password') {
-       return;
-    }
-    // For demo purposes, we'll allow any login
-    return;
+    await _supabase.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
   }
 
   Future<void> signUp(String email, String password) async {
-    await Future.delayed(const Duration(seconds: 1));
-    return;
+    await _supabase.auth.signUp(
+      email: email,
+      password: password,
+    );
   }
 
   Future<void> signOut() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await _supabase.auth.signOut();
   }
   
-  Stream<String?> get authStateChanges => Stream.value('mock_user_id'); // Always logged in for demo after login
+  Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
+  
+  User? get currentUser => _supabase.auth.currentUser;
 }
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
 });
+
