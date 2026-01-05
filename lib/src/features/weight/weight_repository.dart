@@ -40,15 +40,26 @@ class WeightRepository {
   final Box _box;
   final _supabase = Supabase.instance.client;
 
+  RealtimeChannel? _weightChannel;
+
   WeightRepository(this._box) {
     _initRealtime();
+    _supabase.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.tokenRefreshed) {
+        _initRealtime();
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        _weightChannel?.unsubscribe();
+        _weightChannel = null;
+      }
+    });
   }
 
   void _initRealtime() {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    _supabase
+    _weightChannel?.unsubscribe();
+    _weightChannel = _supabase
         .channel('public:weight_logs')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -65,8 +76,8 @@ class WeightRepository {
               _box.put(entry.date, entry.toMap());
             }
           },
-        )
-        .subscribe();
+        );
+    _weightChannel?.subscribe();
   }
 
   Future<void> addWeight(double weight, {String? note}) async {

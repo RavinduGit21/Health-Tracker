@@ -129,15 +129,27 @@ class DailyLogRepository {
   final Box _box;
   final _supabase = Supabase.instance.client;
 
+  RealtimeChannel? _dailyLogChannel;
+
   DailyLogRepository(this._box) {
     _initRealtime();
+    // Re-init when auth state changes (e.g. login)
+    _supabase.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.tokenRefreshed) {
+        _initRealtime();
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        _dailyLogChannel?.unsubscribe();
+        _dailyLogChannel = null;
+      }
+    });
   }
 
   void _initRealtime() {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    _supabase
+    _dailyLogChannel?.unsubscribe();
+    _dailyLogChannel = _supabase
         .channel('public:daily_logs')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -154,8 +166,8 @@ class DailyLogRepository {
               _box.put(log.date, log.toMap());
             }
           },
-        )
-        .subscribe();
+        );
+    _dailyLogChannel?.subscribe();
   }
 
   String _getTodayKey() {
