@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:health_tracker/src/utils/notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LogEntry {
   final String time;

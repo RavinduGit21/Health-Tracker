@@ -11,6 +11,7 @@ import 'package:health_tracker/src/features/weight/weight_screen.dart';
 
 import 'package:health_tracker/src/features/authentication/auth_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:health_tracker/src/common_widgets/main_layout.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
