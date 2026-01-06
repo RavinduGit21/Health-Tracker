@@ -246,6 +246,15 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              ref.read(dailyLogRepositoryProvider).deleteLogEntry(date, entry.id);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${entry.description} deleted")));
+            }, 
+            child: const Text("DELETE", style: TextStyle(color: Colors.redAccent))
+          ),
+          const Spacer(),
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
           ElevatedButton(
             onPressed: () {

@@ -103,7 +103,7 @@ class _HistoryItem extends ConsumerWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
-           Navigator.push(context, MaterialPageRoute(builder: (_) => DailyDetailScreen(log: log)));
+           Navigator.push(context, MaterialPageRoute(builder: (_) => DailyDetailScreen(date: log.date)));
         },
         onLongPress: () => _showEditDialog(context, ref, log),
         child: Padding(
@@ -129,6 +129,10 @@ class _HistoryItem extends ConsumerWidget {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.white24, size: 20),
+                onPressed: () => _showDeleteConfirmation(context, ref, log),
               ),
               const Icon(Icons.chevron_right, color: Colors.white24),
             ],
@@ -156,6 +160,26 @@ class _HistoryItem extends ConsumerWidget {
     );
   }
 
+  void _showDeleteConfirmation(BuildContext context, WidgetRef ref, DailyLog log) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Day Data?"),
+        content: Text("Are you sure you want to delete all entries for ${log.date}?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
+          TextButton(
+            onPressed: () {
+              ref.read(dailyLogRepositoryProvider).deleteLog(log.date);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Data for ${log.date} deleted")));
+            },
+            child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showEditDialog(BuildContext context, WidgetRef ref, DailyLog log) {
     final waterCtrl = TextEditingController(text: log.waterIntake.toString());
@@ -183,6 +207,15 @@ class _HistoryItem extends ConsumerWidget {
           ],
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              ref.read(dailyLogRepositoryProvider).deleteLog(log.date);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Log for ${log.date} deleted")));
+            },
+            child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
+          ),
+          const Spacer(),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
           ElevatedButton(
             onPressed: () {

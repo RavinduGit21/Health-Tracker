@@ -264,42 +264,77 @@ class WeightScreen extends ConsumerWidget {
   void _showEditWeightDialog(BuildContext context, WidgetRef ref, WeightEntry entry) {
     final weightController = TextEditingController(text: entry.weight.toString());
     final noteController = TextEditingController(text: entry.note);
+    DateTime selectedDate = DateTime.tryParse(entry.date) ?? DateTime.now();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Edit Weight (${entry.date})"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: weightController,
-              decoration: InputDecoration(labelText: "Weight (${ref.read(goalsProvider).weightUnit})"),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text("Edit Weight Entry"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("Date"),
+                subtitle: Text(DateFormat('MMM d, yyyy').format(selectedDate)),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    setState(() => selectedDate = picked);
+                  }
+                },
+              ),
+              TextField(
+                controller: weightController,
+                decoration: InputDecoration(labelText: "Weight (${ref.read(goalsProvider).weightUnit})"),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(labelText: "Note (optional)"),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                ref.read(weightRepositoryProvider).deleteEntry(entry.date);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Entry deleted")));
+              }, 
+              child: const Text("DELETE", style: TextStyle(color: Colors.redAccent))
             ),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(labelText: "Note (optional)"),
+            const Spacer(),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+            ElevatedButton(
+              onPressed: () async {
+                final weight = double.tryParse(weightController.text);
+                if (weight != null) {
+                  final newDateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+                  
+                  if (newDateStr != entry.date) {
+                    await ref.read(weightRepositoryProvider).deleteEntry(entry.date);
+                  }
+
+                  await ref.read(weightRepositoryProvider).updateWeight(
+                    newDateStr, 
+                    weight, 
+                    note: noteController.text.isEmpty ? null : noteController.text
+                  );
+                  if (context.mounted) Navigator.pop(context);
+                }
+              }, 
+              child: const Text("SAVE")
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
-          ElevatedButton(
-            onPressed: () {
-              final weight = double.tryParse(weightController.text);
-              if (weight != null) {
-                ref.read(weightRepositoryProvider).updateWeight(
-                  entry.date, 
-                  weight, 
-                  note: noteController.text.isEmpty ? null : noteController.text
-                );
-                Navigator.pop(context);
-              }
-            }, 
-            child: const Text("SAVE")
-          ),
-        ],
       ),
     );
   }
@@ -308,33 +343,61 @@ class WeightScreen extends ConsumerWidget {
     final controller = TextEditingController();
     final latest = ref.read(latestWeightProvider);
     if (latest != null) controller.text = latest.weight.toString();
+    DateTime selectedDate = DateTime.now();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Log Today's Weight"),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            hintText: "Enter weight",
-            suffixText: ref.read(goalsProvider).weightUnit,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text("Log Weight"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("Date"),
+                subtitle: Text(DateFormat('MMM d, yyyy').format(selectedDate)),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    setState(() => selectedDate = picked);
+                  }
+                },
+              ),
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  hintText: "Enter weight",
+                  suffixText: ref.read(goalsProvider).weightUnit,
+                ),
+                autofocus: true,
+              ),
+            ],
           ),
-          autofocus: true,
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+            ElevatedButton(
+              onPressed: () async {
+                final weight = double.tryParse(controller.text);
+                if (weight != null) {
+                  await ref.read(weightRepositoryProvider).addWeight(
+                    weight, 
+                    date: selectedDate
+                  );
+                  if (context.mounted) Navigator.pop(context);
+                }
+              }, 
+              child: const Text("SAVE")
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
-          ElevatedButton(
-            onPressed: () {
-              final weight = double.tryParse(controller.text);
-              if (weight != null) {
-                ref.read(weightRepositoryProvider).addWeight(weight);
-                Navigator.pop(context);
-              }
-            }, 
-            child: const Text("SAVE")
-          ),
-        ],
       ),
     );
   }

@@ -511,3 +511,20 @@ final allLogsProvider = StreamProvider.autoDispose<List<DailyLog>>((ref) async* 
   }
 });
 
+final dailyLogByDateProvider = StreamProvider.autoDispose.family<DailyLog, String>((ref, date) async* {
+  final repo = ref.watch(dailyLogRepositoryProvider);
+  final box = Hive.box('daily_logs');
+  
+  final getLog = () {
+    final data = box.get(date);
+    if (data == null) return DailyLog(date: date, waterIntake: 0, sugarIntake: 0);
+    return DailyLog.fromMap(data);
+  };
+
+  yield getLog();
+  
+  await for (final event in box.watch(key: date)) {
+    yield getLog();
+  }
+});
+

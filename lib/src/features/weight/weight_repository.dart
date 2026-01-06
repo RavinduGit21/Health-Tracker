@@ -80,9 +80,9 @@ class WeightRepository {
     _weightChannel?.subscribe();
   }
 
-  Future<void> addWeight(double weight, {String? note}) async {
-    final date = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final entry = WeightEntry(date: date, weight: weight, note: note);
+  Future<void> addWeight(double weight, {String? note, DateTime? date}) async {
+    final dateStr = DateFormat('yyyy-MM-dd').format(date ?? DateTime.now());
+    final entry = WeightEntry(date: dateStr, weight: weight, note: note);
     await _saveEntry(entry);
   }
 
