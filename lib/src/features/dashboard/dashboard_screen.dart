@@ -108,9 +108,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _buildWeightCard(context, latestWeight, goalsState),
-                    const SizedBox(height: 16),
-                    _buildSleepCard(context, ref.watch(activeSleepSessionProvider)),
+                    Row(
+                      children: [
+                        Expanded(child: _buildWeightCard(context, latestWeight, goalsState)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _buildSleepCard(context, ref.watch(activeSleepSessionProvider))),
+                      ],
+                    ),
                     const SizedBox(height: 24),
                     Text("Today's Timeline", style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 12),
@@ -458,36 +462,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       onTap: () => context.push('/weight'),
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surfaceDark,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white10),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.monitor_weight, color: Colors.orange),
+              child: const Icon(Icons.monitor_weight, color: Colors.orange, size: 20),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Text("Body Weight", style: Theme.of(context).textTheme.titleMedium),
-                   Text(
-                     latest != null ? "${latest.weight} ${goals.weightUnit}" : "No data",
-                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)
-                   ),
-                ],
-              ),
+            const SizedBox(height: 12),
+            Text(
+              latest != null ? "${latest.weight} ${goals.weightUnit}" : "Log Weight",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const Icon(Icons.chevron_right, color: Colors.white24),
+            const Text("Body Weight", style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           ],
         ),
       ),
@@ -500,41 +499,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       onTap: () => context.push('/sleep'),
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surfaceDark,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white10),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.indigo.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                isSleeping ? Icons.nightlight_round : Icons.bedtime_outlined, 
-                color: Colors.indigoAccent
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isSleeping ? Icons.nightlight_round : Icons.bedtime_outlined, 
+                    color: Colors.indigoAccent,
+                    size: 20,
+                  ),
+                ),
+                if (isSleeping)
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(color: Colors.indigoAccent, shape: BoxShape.circle),
+                  ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Text("Sleep Tracking", style: Theme.of(context).textTheme.titleMedium),
-                   Text(
-                     isSleeping ? "Currently Sleeping..." : "Track your rest",
-                     style: const TextStyle(color: AppColors.textSecondary)
-                   ),
-                ],
-              ),
+            const SizedBox(height: 12),
+            Text(
+              isSleeping ? "Asleep..." : "Track Sleep",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            if (isSleeping)
-              const Icon(Icons.circle, color: Colors.indigoAccent, size: 12),
-            const Icon(Icons.chevron_right, color: Colors.white24),
+            const Text("Sleep Journey", style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           ],
         ),
       ),
