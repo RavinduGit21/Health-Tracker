@@ -176,7 +176,10 @@ class DailyLogRepository {
             value: user.id,
           ),
           callback: (payload) {
-            if (payload.newRecord != null) {
+            if (payload.eventType == PostgresChangeEvent.delete) {
+              final oldId = payload.oldRecord['date'];
+              if (oldId != null) _box.delete(oldId);
+            } else if (payload.newRecord != null) {
               final log = DailyLog.fromSupabase(payload.newRecord);
               _box.put(log.date, log.toMap());
             }
@@ -334,14 +337,25 @@ class DailyLogRepository {
     if (user == null) return;
 
     try {
-      final data = await _supabase
+      final response = await _supabase
           .from('daily_logs')
           .select()
           .eq('user_id', user.id);
       
-      for (var row in data) {
-        final log = DailyLog.fromSupabase(row);
+      final remoteLogs = (response as List).map((row) => DailyLog.fromSupabase(row)).toList();
+      final remoteDates = remoteLogs.map((l) => l.date).toSet();
+
+      // Update local with remote
+      for (var log in remoteLogs) {
         await _box.put(log.date, log.toMap());
+      }
+
+      // Delete local that is NOT in remote (Mirroring)
+      final localKeys = _box.keys.whereType<String>().toList();
+      for (var key in localKeys) {
+        if (!remoteDates.contains(key)) {
+           await _box.delete(key);
+        }
       }
     } catch (e) {
       print("Supabase pull failed: $e");

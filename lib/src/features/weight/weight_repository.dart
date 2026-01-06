@@ -71,7 +71,10 @@ class WeightRepository {
             value: user.id,
           ),
           callback: (payload) {
-            if (payload.newRecord != null) {
+            if (payload.eventType == PostgresChangeEvent.delete) {
+              final oldId = payload.oldRecord['date'];
+              if (oldId != null) _box.delete(oldId);
+            } else if (payload.newRecord != null) {
               final entry = WeightEntry.fromSupabase(payload.newRecord);
               _box.put(entry.date, entry.toMap());
             }
@@ -107,10 +110,19 @@ class WeightRepository {
     if (user == null) return;
 
     try {
-      final data = await _supabase.from('weight_logs').select().eq('user_id', user.id);
-      for (var row in data) {
-        final entry = WeightEntry.fromSupabase(row);
+      final response = await _supabase.from('weight_logs').select().eq('user_id', user.id);
+      final remoteEntries = (response as List).map((row) => WeightEntry.fromSupabase(row)).toList();
+      final remoteDates = remoteEntries.map((e) => e.date).toSet();
+
+      for (var entry in remoteEntries) {
         await _box.put(entry.date, entry.toMap());
+      }
+
+      final localKeys = _box.keys.whereType<String>().toList();
+      for (var key in localKeys) {
+        if (!remoteDates.contains(key)) {
+          await _box.delete(key);
+        }
       }
     } catch (e) {
       print("Weight pull failed: $e");
