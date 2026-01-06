@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_tracker/src/constants/app_colors.dart';
@@ -17,6 +18,14 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   final _searchController = TextEditingController();
   List<FoodItem> _results = [];
   bool _isLoading = false;
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   void _search(String query) async {
     setState(() => _isLoading = true);
@@ -51,8 +60,10 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
           TextField(
             controller: _searchController,
             onChanged: (val) {
-               // Debounce could be added here
-               if (val.length > 2) _search(val);
+               if (_debounce?.isActive ?? false) _debounce!.cancel();
+               _debounce = Timer(const Duration(milliseconds: 500), () {
+                 if (val.length > 2) _search(val);
+               });
             },
             decoration: InputDecoration(
               hintText: "Search (e.g. Apple, Coke)",

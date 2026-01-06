@@ -1,4 +1,11 @@
 const STORAGE_KEY = 'health_tracker_v1';
+const SUPABASE_URL = 'https://brcqcvlkxxhpantlizdd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_IvESaEOXlfXfaCv4BI04mg_jOIBPe12';
+
+let supabase = null;
+if (window.supabase) {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 function toISODateLocal(d) {
@@ -50,7 +57,7 @@ function defaultEntry() {
     notes: '',
     waterMl: 0,
     sugarG: 0,
-    logs: [], // Each item: { id, time, type, amount, description }
+    logs: [],
     updatedAt: new Date().toISOString()
   };
 }
@@ -98,7 +105,6 @@ function downloadJSON(filename, obj) {
 function formatYesNo(v) { return v ? 'Yes' : 'No'; }
 
 function computeSugarStreak(state, asOfDate) {
-  // Streak counts consecutive sugarCut=true days ending at asOfDate.
   let count = 0;
   let cursor = asOfDate;
   while (true) {
@@ -163,7 +169,7 @@ function computeChallengeProgress(state, asOfIso) {
 
   const diffMs = parseISODateLocal(asOfIso) - parseISODateLocal(start);
   const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-  const dayIndex = diffDays + 1; // 1-based
+  const dayIndex = diffDays + 1;
 
   const targetDays = 7;
   const effectiveDays = clamp(dayIndex, 0, targetDays);
@@ -175,15 +181,10 @@ function computeChallengeProgress(state, asOfIso) {
     if (e.sugarCut) completedDays++;
   }
 
-  return {
-    active: true,
-    dayIndex,
-    completedDays,
-    targetDays
-  };
+  return { active: true, dayIndex, completedDays, targetDays };
 }
 
-// UI
+// UI Elements
 const els = {
   dateInput: document.getElementById('dateInput'),
   todayBtn: document.getElementById('todayBtn'),
@@ -217,8 +218,13 @@ const els = {
   last7Body: document.getElementById('last7Body'),
   exportPdfBtn: document.getElementById('exportPdfBtn'),
   exportBtn: document.getElementById('exportBtn'),
-  importFile: document.getElementById('importFile'),
-  resetBtn: document.getElementById('resetBtn'),
+  loginBtn: document.getElementById('loginBtn'),
+  logoutBtn: document.getElementById('logoutBtn'),
+  emailInput: document.getElementById('emailInput'),
+  passwordInput: document.getElementById('passwordInput'),
+  authSection: document.getElementById('authSection'),
+  userSection: document.getElementById('userSection'),
+  userEmail: document.getElementById('userEmail'),
 
   tabs: Array.from(document.querySelectorAll('[data-tab]')),
   panels: Array.from(document.querySelectorAll('[data-panel]')),
@@ -238,6 +244,85 @@ const els = {
 let state = loadState();
 let selectedDate = toISODateLocal(new Date());
 let weightChartInstance = null;
+
+async function syncRemote() {
+  if (!supabase) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  try {
+    // 1. Sync Settings
+    const { data: settings } = await supabase.from('user_settings').select().eq('user_id', user.id).maybeSingle();
+    if (settings) {
+      state.settings.waterGoalMl = settings.water_goal;
+      state.settings.challengeStart = settings.challenge_start_date;
+    }
+
+    // 2. Sync Daily Logs
+    const { data: logs } = await supabase.from('daily_logs').select().eq('user_id', user.id);
+    if (logs) {
+      logs.forEach(l => {
+        state.entries[l.date] = {
+          waterMl: l.water_intake,
+          sugarCut: l.sugar_cut_completed,
+          workoutDone: l.workout_done,
+          caloriesBurned: l.calories_burned,
+          workoutNotes: l.workout_notes,
+          notes: l.notes,
+          logs: l.entries || [],
+          updatedAt: new Date().toISOString()
+        };
+      });
+    }
+
+    // 3. Sync Weights
+    const { data: weights } = await supabase.from('weight_logs').select().eq('user_id', user.id);
+    if (weights) {
+      weights.forEach(w => {
+        state.weights[w.date] = w.weight;
+      });
+    }
+
+    saveState(state);
+    renderFormForDate(selectedDate);
+    console.log("Cloud sync complete");
+  } catch (e) {
+    console.error("Sync failed", e);
+  }
+}
+
+async function login() {
+  const email = els.emailInput.value;
+  const password = els.passwordInput.value;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    alert("Login failed: " + error.message);
+  } else {
+    initAuth();
+  }
+}
+
+async function logout() {
+  await supabase.auth.signOut();
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
+async function initAuth() {
+  if (!supabase) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    els.authSection.style.display = 'none';
+    els.userSection.style.display = 'flex';
+    els.userEmail.textContent = user.email;
+    syncRemote();
+
+    // Setup subscriptions
+    supabase.channel('any').on('postgres_changes', { event: '*', schema: 'public', table: 'daily_logs' }, syncRemote).subscribe();
+    supabase.channel('any2').on('postgres_changes', { event: '*', schema: 'public', table: 'weight_logs' }, syncRemote).subscribe();
+    supabase.channel('any3').on('postgres_changes', { event: '*', schema: 'public', table: 'user_settings' }, syncRemote).subscribe();
+  }
+}
 
 function setStatus(text) {
   els.saveStatus.textContent = text;
@@ -274,13 +359,13 @@ function renderLast7(endIso) {
     tr.className = 'clickable-row';
     tr.dataset.date = d;
     tr.innerHTML = `
-      <td>${d}</td>
-      <td>${formatYesNo(e.sugarCut)}</td>
-      <td>${formatYesNo(e.workoutDone)}</td>
-      <td>${calories}</td>
-      <td>${Number(e.waterMl ?? 0)}</td>
-      <td><button class="btn btn-secondary btn-mini" type="button" data-edit-date="${d}">Edit</button></td>
-    `;
+            <td>${d}</td>
+            <td>${formatYesNo(e.sugarCut)}</td>
+            <td>${formatYesNo(e.workoutDone)}</td>
+            <td>${calories}</td>
+            <td>${Number(e.waterMl ?? 0)}</td>
+            <td><button class="btn btn-secondary btn-mini" type="button" data-edit-date="${d}">Edit</button></td>
+        `;
     els.last7Body.appendChild(tr);
   }
 }
@@ -292,560 +377,172 @@ function syncCaloriesUi(entry) {
     els.caloriesBurnedInput.value = '0';
     return;
   }
-
   const current = Number(els.caloriesBurnedInput.value || entry.caloriesBurned || 0);
-  const normalized = Number.isFinite(current) && current > 0 ? current : 100;
-  els.caloriesBurnedInput.value = String(normalized);
+  els.caloriesBurnedInput.value = String(current > 0 ? current : 100);
 }
 
 function renderWeights() {
   const weights = getWeightsSorted(state);
-  els.weightEntriesValue.textContent = String(weights.length);
-
   if (weights.length === 0) {
     els.weightLatestValue.textContent = '—';
-    els.weightLatestSub.textContent = 'kg';
-    els.weightChangeValue.textContent = '—';
     els.weightBody.innerHTML = '';
     renderWeightChart([]);
     return;
   }
-
   const latest = weights[weights.length - 1];
-  const first = weights[0];
   els.weightLatestValue.textContent = String(latest.kg);
-  els.weightLatestSub.textContent = `kg (${latest.date})`;
-  const change = Math.round((latest.kg - first.kg) * 10) / 10;
-  els.weightChangeValue.textContent = String(change);
-
   els.weightBody.innerHTML = '';
   for (const w of weights.slice().reverse()) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${w.date}</td>
-      <td>${w.kg}</td>
-      <td style="text-align:right">
-        <button class="btn btn-secondary btn-mini" onclick="loadWeightToForm('${w.date}', ${w.kg})">Edit</button>
-      </td>
-    `;
+    tr.innerHTML = `<td>${w.date}</td><td>${w.kg}</td><td style="text-align:right"><button class="btn btn-secondary btn-mini" onclick="loadWeightToForm('${w.date}', ${w.kg})">Edit</button></td>`;
     els.weightBody.appendChild(tr);
   }
-
   renderWeightChart(weights);
 }
 
-function ensureWeightChart() {
-  if (!els.weightChart) return null;
-  if (weightChartInstance) return weightChartInstance;
-  if (!window.Chart) return null;
-
-  const ctx = els.weightChart.getContext('2d');
-  weightChartInstance = new window.Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: 'Weight loss (kg)',
-          data: [],
-          borderWidth: 3,
-          borderColor: 'rgba(56, 189, 248, 0.95)',
-          backgroundColor: 'rgba(56, 189, 248, 0.20)',
-          fill: true,
-          tension: 0.35,
-          pointRadius: 3,
-          pointHoverRadius: 5
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx2) => `Loss: ${ctx2.parsed.y} kg`
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { maxRotation: 0, autoSkip: true },
-          grid: { display: false }
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.08)' }
-        }
-      }
-    }
-  });
-
-  return weightChartInstance;
-}
-
 function renderWeightChart(weights) {
-  const chart = ensureWeightChart();
-  if (!chart) return;
-
-  if (!weights || weights.length === 0) {
-    chart.data.labels = [];
-    chart.data.datasets[0].data = [];
-    chart.update();
-    return;
+  if (!els.weightChart) return;
+  if (!weightChartInstance) {
+    const ctx = els.weightChart.getContext('2d');
+    weightChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Weight (kg)', data: [], borderColor: '#7c3aed', tension: 0.3 }] },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
   }
-
-  const firstKg = weights[0].kg;
-  const labels = weights.map(w => w.date);
-  const lossSeries = weights.map(w => Math.round((firstKg - w.kg) * 10) / 10);
-
-  chart.data.labels = labels;
-  chart.data.datasets[0].data = lossSeries;
-  chart.update();
+  weightChartInstance.data.labels = weights.map(w => w.date);
+  weightChartInstance.data.datasets[0].data = weights.map(w => w.kg);
+  weightChartInstance.update();
 }
 
 function renderSugarProgress(asOfIso) {
   const streak = computeSugarStreak(state, asOfIso);
   els.sugarStreakValue.textContent = String(streak);
-
   const ch = computeChallengeProgress(state, asOfIso);
-  if (!ch.active) {
-    els.sugarStreakSub.textContent = 'days';
-    return;
-  }
-
-  if (ch.dayIndex <= 0) {
-    els.sugarStreakSub.textContent = 'days (challenge not started yet)';
-    return;
-  }
-
-  if (ch.dayIndex > ch.targetDays) {
-    els.sugarStreakSub.textContent = `days (challenge done: ${ch.completedDays}/${ch.targetDays})`;
-    return;
-  }
-
-  els.sugarStreakSub.textContent = `days (challenge day ${ch.dayIndex}/7, done ${ch.completedDays}/7)`;
+  els.sugarStreakSub.textContent = ch.active ? `days (Challenge: Day ${ch.dayIndex}/7)` : 'days';
 }
 
 function renderFormForDate(isoDate) {
   selectedDate = isoDate;
   const entry = getEntry(state, selectedDate);
-
   els.dateInput.value = selectedDate;
-
   els.sugarCutInput.checked = Boolean(entry.sugarCut);
   els.workoutDoneInput.checked = Boolean(entry.workoutDone);
-  els.caloriesBurnedInput.value = String(entry.workoutDone ? Number(entry.caloriesBurned ?? 0) : 0);
-  syncCaloriesUi(entry);
+  els.caloriesBurnedInput.value = String(entry.caloriesBurned);
   els.workoutNotesInput.value = entry.workoutNotes ?? '';
   els.notesInput.value = entry.notes ?? '';
-
   els.waterGoalInput.value = String(state.settings.waterGoalMl ?? 2000);
   els.challengeStartInput.value = state.settings.challengeStart || '';
-
   renderWater(entry);
   renderSugarProgress(selectedDate);
   renderLast7(selectedDate);
   renderWeights();
 }
 
-function persistCurrentForm() {
+async function persistCurrentForm() {
   const entry = getEntry(state, selectedDate);
-
   entry.sugarCut = els.sugarCutInput.checked;
   entry.workoutDone = els.workoutDoneInput.checked;
   entry.caloriesBurned = entry.workoutDone ? Number(els.caloriesBurnedInput.value || 0) : 0;
   entry.workoutNotes = els.workoutNotesInput.value;
   entry.notes = els.notesInput.value;
-
   setEntry(state, selectedDate, entry);
 
-  const waterGoal = Number(els.waterGoalInput.value || 0);
-  state.settings.waterGoalMl = Number.isFinite(waterGoal) ? Math.max(0, Math.round(waterGoal)) : 2000;
-
-  const challengeStart = String(els.challengeStartInput.value || '');
-  state.settings.challengeStart = challengeStart;
+  state.settings.waterGoalMl = Number(els.waterGoalInput.value);
+  state.settings.challengeStart = els.challengeStartInput.value;
 
   saveState(state);
-  setStatus('Saved');
+  setStatus('Saved locally...');
 
-  renderWater(entry);
-  renderSugarProgress(selectedDate);
-  renderLast7(selectedDate);
-}
-
-function hasDayEntry(state, isoDate) {
-  return Boolean(state.entries && Object.prototype.hasOwnProperty.call(state.entries, isoDate));
-}
-
-function deleteDayEntry(isoDate) {
-  if (!hasDayEntry(state, isoDate)) {
-    setStatus('Nothing to delete');
-    return;
-  }
-  const ok = confirm(`Delete saved record for ${isoDate}?`);
-  if (!ok) return;
-  delete state.entries[isoDate];
-  saveState(state);
-  renderFormForDate(isoDate);
-  setStatus('Deleted');
-}
-
-function copyOrMoveDay({ fromDate, toDate, move }) {
-  if (!fromDate || !toDate) {
-    setStatus('Pick a date');
-    return;
-  }
-  if (fromDate === toDate) {
-    setStatus('Same date');
-    return;
-  }
-  if (!hasDayEntry(state, fromDate)) {
-    setStatus('Nothing to copy');
-    return;
-  }
-
-  const src = getEntry(state, fromDate);
-  const destExists = hasDayEntry(state, toDate);
-  if (destExists) {
-    const okOverwrite = confirm(`A record already exists for ${toDate}. Overwrite it?`);
-    if (!okOverwrite) return;
-  }
-
-  const next = { ...src };
-  next.updatedAt = new Date().toISOString();
-  setEntry(state, toDate, next);
-
-  if (move) {
-    delete state.entries[fromDate];
-  }
-
-  saveState(state);
-  renderFormForDate(toDate);
-  setStatus(move ? 'Moved' : 'Copied');
-}
-
-function setWeightStatus(text) {
-  els.weightStatus.textContent = text;
-  if (text) {
-    clearTimeout(setWeightStatus._t);
-    setWeightStatus._t = setTimeout(() => { els.weightStatus.textContent = ''; }, 1500);
-  }
-}
-
-function loadWeightToForm(date, kg) {
-  els.weightDateInput.value = date;
-  els.weightKgInput.value = String(kg);
-  els.weightDateInput.scrollIntoView({ behavior: 'smooth' });
-}
-
-function saveWeightFromForm() {
-  const date = String(els.weightDateInput.value || '');
-  const kg = Number(els.weightKgInput.value);
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    setWeightStatus('Pick a date');
-    return;
-  }
-  if (!Number.isFinite(kg) || kg <= 0) {
-    setWeightStatus('Enter weight');
-    return;
-  }
-
-  setWeight(state, date, Math.round(kg * 10) / 10);
-  saveState(state);
-  renderWeights();
-  setWeightStatus('Saved');
-}
-
-function deleteWeightFromForm() {
-  const date = String(els.weightDateInput.value || '');
-  if (!date) return;
-  if (confirm(`Delete weight entry for ${date}?`)) {
-    deleteWeight(state, date);
-    saveState(state);
-    renderWeights();
-    setWeightStatus('Deleted');
-    els.weightKgInput.value = '';
-  }
-}
-
-function setActiveTab(tab) {
-  for (const b of els.tabs) {
-    b.classList.toggle('is-active', b.dataset.tab === tab);
-  }
-  for (const p of els.panels) {
-    p.hidden = p.dataset.panel !== tab;
-  }
-}
-
-function exportPdfReport() {
-  try {
-    const jspdfNS = window.jspdf;
-    const JsPDF = jspdfNS?.jsPDF;
-    if (!JsPDF) throw new Error('jsPDF not loaded');
-
-    const doc = new JsPDF({ unit: 'pt', format: 'a4' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    const generated = toISODateLocal(new Date());
-    const summary7 = computeLast7Summary(state, selectedDate);
-    const streak = computeSugarStreak(state, selectedDate);
-    const ch = computeChallengeProgress(state, selectedDate);
-    const weights = getWeightsSorted(state);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text('Personal Health Report', 40, 54);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    doc.text(`Generated: ${generated}`, 40, 74);
-    doc.text(`Report as of: ${selectedDate}`, 40, 90);
-
-    doc.setDrawColor(255);
-    doc.setFillColor(124, 58, 237);
-    doc.roundedRect(40, 105, pageWidth - 80, 68, 10, 10, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(`Sugar cut streak: ${streak} days`, 54, 130);
-    doc.text(`Workouts (last 7): ${summary7.workoutDays} days`, 54, 148);
-    doc.text(`Avg water (last 7): ${summary7.avgWater} ml/day`, 320, 130);
-    doc.text(`Avg calories (last 7): ${summary7.avgCalories} kcal/day`, 320, 148);
-    doc.setTextColor(0, 0, 0);
-
-    let challengeLine = 'Challenge: not set';
-    if (ch.active) {
-      challengeLine = `7-day sugar challenge start: ${state.settings.challengeStart || '-'} | done: ${ch.completedDays}/7`;
+  // Cloud Save
+  if (supabase) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      try {
+        // 1. Save Settings
+        await supabase.from('user_settings').upsert({
+          user_id: user.id,
+          water_goal: state.settings.waterGoalMl,
+          challenge_start_date: state.settings.challengeStart
+        });
+        // 2. Save Daily Log
+        await supabase.from('daily_logs').upsert({
+          user_id: user.id,
+          date: selectedDate,
+          water_intake: entry.waterMl,
+          sugar_cut_completed: entry.sugarCut,
+          workout_done: entry.workoutDone,
+          calories_burned: entry.caloriesBurned,
+          workout_notes: entry.workoutNotes,
+          notes: entry.notes
+        });
+        setStatus('Synced to Cloud');
+      } catch (e) {
+        console.error(e);
+        setStatus('Local only (Cloud error)');
+      }
     }
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    doc.text(challengeLine, 40, 195);
-
-    const dailyRows = summary7.dates.map(d => {
-      const e = getEntry(state, d);
-      const calories = e.workoutDone ? Number(e.caloriesBurned ?? 0) : 0;
-      return [
-        d,
-        formatYesNo(e.sugarCut),
-        formatYesNo(e.workoutDone),
-        String(calories),
-        String(Number(e.waterMl ?? 0))
-      ];
-    });
-
-    doc.autoTable({
-      startY: 215,
-      head: [['Date', 'Sugar', 'Workout', 'Calories', 'Water (ml)']],
-      body: dailyRows,
-      styles: { font: 'helvetica', fontSize: 10 },
-      headStyles: { fillColor: [17, 24, 39] },
-      alternateRowStyles: { fillColor: [245, 246, 248] },
-      margin: { left: 40, right: 40 }
-    });
-
-    const afterDailyY = doc.lastAutoTable?.finalY ? doc.lastAutoTable.finalY + 18 : 470;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Weight progress', 40, afterDailyY);
-
-    const chart = ensureWeightChart();
-    if (chart && els.weightChart) {
-      // Ensure it is up-to-date for export.
-      renderWeightChart(getWeightsSorted(state));
-      const chartDataUrl = els.weightChart.toDataURL('image/png', 1.0);
-      const imgW = pageWidth - 80;
-      const imgH = 180;
-      doc.addImage(chartDataUrl, 'PNG', 40, afterDailyY + 10, imgW, imgH);
-    }
-
-    const tableStartY = afterDailyY + (chart && els.weightChart ? 210 : 10);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Weight history', 40, afterDailyY + (chart && els.weightChart ? 205 : 10));
-
-    const weightRows = weights.slice().reverse().map(w => [w.date, String(w.kg)]);
-    doc.autoTable({
-      startY: afterDailyY + (chart && els.weightChart ? 220 : 20),
-      head: [['Date', 'Weight (kg)']],
-      body: weightRows.length ? weightRows : [['—', '—']],
-      styles: { font: 'helvetica', fontSize: 10 },
-      headStyles: { fillColor: [17, 24, 39] },
-      alternateRowStyles: { fillColor: [245, 246, 248] },
-      margin: { left: 40, right: 40 }
-    });
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text('Generated by your personal tracker (local data).', 40, doc.internal.pageSize.getHeight() - 30);
-
-    doc.save(`health-report-${selectedDate}.pdf`);
-  } catch {
-    setStatus('PDF export failed');
   }
+  renderFormForDate(selectedDate);
 }
+
+// Event Listeners
+els.dateInput.onchange = () => renderFormForDate(els.dateInput.value);
+els.todayBtn.onclick = () => renderFormForDate(toISODateLocal(new Date()));
+els.saveBtn.onclick = persistCurrentForm;
+els.loginBtn.onclick = login;
+els.logoutBtn.onclick = logout;
+
+// Tabs
+els.tabs.forEach(t => {
+  t.onclick = () => {
+    els.tabs.forEach(tx => tx.classList.toggle('is-active', tx === t));
+    els.panels.forEach(p => p.hidden = p.dataset.panel !== t.dataset.tab);
+  };
+});
+
+// Water
+els.add250Btn.onclick = () => { addWater(250); };
+els.add500Btn.onclick = () => { addWater(500); };
+els.add1000Btn.onclick = () => { addWater(1000); };
+els.clearWaterBtn.onclick = () => {
+  const entry = getEntry(state, selectedDate);
+  entry.waterMl = 0;
+  persistCurrentForm();
+};
 
 function addWater(delta) {
   const entry = getEntry(state, selectedDate);
-  entry.waterMl = Math.max(0, Number(entry.waterMl ?? 0) + delta);
-  setEntry(state, selectedDate, entry);
+  entry.waterMl += delta;
+  persistCurrentForm();
+}
+
+// Weight
+els.saveWeightBtn.onclick = async () => {
+  const date = els.weightDateInput.value;
+  const kg = Number(els.weightKgInput.value);
+  if (!date || !kg) return;
+  state.weights[date] = kg;
   saveState(state);
-  renderWater(entry);
-  renderLast7(selectedDate);
-}
-
-function clearWater() {
-  const entry = getEntry(state, selectedDate);
-  entry.waterMl = 0;
-  setEntry(state, selectedDate, entry);
-  saveState(state);
-  renderWater(entry);
-  renderLast7(selectedDate);
-}
-
-// Events
-els.dateInput.addEventListener('change', () => {
-  const v = els.dateInput.value;
-  if (v) renderFormForDate(v);
-});
-
-els.todayBtn.addEventListener('click', () => {
-  const today = toISODateLocal(new Date());
-  renderFormForDate(today);
-});
-
-if (els.deleteDayBtn) {
-  els.deleteDayBtn.addEventListener('click', () => {
-    deleteDayEntry(selectedDate);
-  });
-}
-
-if (els.copyDayBtn && els.moveCopyDateInput) {
-  els.copyDayBtn.addEventListener('click', () => {
-    const toDate = String(els.moveCopyDateInput.value || '');
-    copyOrMoveDay({ fromDate: selectedDate, toDate, move: false });
-  });
-}
-
-if (els.moveDayBtn && els.moveCopyDateInput) {
-  els.moveDayBtn.addEventListener('click', () => {
-    const toDate = String(els.moveCopyDateInput.value || '');
-    copyOrMoveDay({ fromDate: selectedDate, toDate, move: true });
-  });
-}
-
-els.last7Body.addEventListener('click', (ev) => {
-  const editBtn = ev.target?.closest?.('[data-edit-date]');
-  const tr = ev.target?.closest?.('tr[data-date]');
-  const date = (editBtn && editBtn.getAttribute('data-edit-date')) || (tr && tr.dataset.date);
-  if (!date) return;
-
-  setActiveTab('today');
-  renderFormForDate(date);
-});
-
-els.saveBtn.addEventListener('click', () => {
-  persistCurrentForm();
-});
-
-els.waterGoalInput.addEventListener('change', () => {
-  persistCurrentForm();
-});
-
-els.challengeStartInput.addEventListener('change', () => {
-  persistCurrentForm();
-});
-
-els.caloriesBurnedInput.addEventListener('change', () => {
-  persistCurrentForm();
-});
-
-els.workoutDoneInput.addEventListener('change', () => {
-  const entry = getEntry(state, selectedDate);
-  entry.workoutDone = els.workoutDoneInput.checked;
-  syncCaloriesUi(entry);
-  persistCurrentForm();
-});
-
-els.add250Btn.addEventListener('click', () => addWater(250));
-els.add500Btn.addEventListener('click', () => addWater(500));
-els.add1000Btn.addEventListener('click', () => addWater(1000));
-els.clearWaterBtn.addEventListener('click', () => clearWater());
-
-els.exportBtn.addEventListener('click', () => {
-  const payload = loadState();
-  const filename = `health-tracker-backup-${toISODateLocal(new Date())}.json`;
-  downloadJSON(filename, payload);
-});
-
-els.exportPdfBtn.addEventListener('click', () => {
-  exportPdfReport();
-});
-
-els.importFile.addEventListener('change', async () => {
-  const file = els.importFile.files?.[0];
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid file');
-
-    const merged = {
-      settings: {
-        waterGoalMl: Number(parsed?.settings?.waterGoalMl ?? state.settings.waterGoalMl ?? 2000),
-        challengeStart: String(parsed?.settings?.challengeStart ?? state.settings.challengeStart ?? ''),
-      },
-      entries: parsed?.entries && typeof parsed.entries === 'object' ? parsed.entries : {},
-      weights: parsed?.weights && typeof parsed.weights === 'object' ? parsed.weights : (state.weights || {})
-    };
-
-    state = merged;
-    saveState(state);
-    renderFormForDate(selectedDate);
-    setStatus('Imported');
-  } catch {
-    setStatus('Import failed');
-  } finally {
-    els.importFile.value = '';
+  if (supabase) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('weight_logs').upsert({ user_id: user.id, date, weight: kg });
+    }
   }
-});
+  renderWeights();
+  els.weightStatus.textContent = 'Weight logged!';
+};
 
-els.resetBtn.addEventListener('click', () => {
-  const ok = confirm('This will delete all saved data on this device. Continue?');
-  if (!ok) return;
-  localStorage.removeItem(STORAGE_KEY);
-  state = loadState();
-  renderFormForDate(toISODateLocal(new Date()));
-  setStatus('Reset');
-});
-
-els.saveWeightBtn.addEventListener('click', () => {
-  saveWeightFromForm();
-});
-
-for (const b of els.tabs) {
-  b.addEventListener('click', () => {
-    setActiveTab(b.dataset.tab);
-  });
+function loadWeightToForm(date, kg) {
+  els.weightDateInput.value = date;
+  els.weightKgInput.value = kg;
 }
 
 // Init
-els.weightDateInput.value = toISODateLocal(new Date());
-if (els.moveCopyDateInput) {
-  els.moveCopyDateInput.value = toISODateLocal(new Date());
-}
+setInterval(() => {
+  els.localTimeText.textContent = new Date().toLocaleTimeString();
+}, 1000);
+
+initAuth();
 renderFormForDate(selectedDate);
-setActiveTab('today');
-
-function updateLocalTime() {
-  if (!els.localTimeText) return;
-  const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  els.localTimeText.textContent = `Local time: ${time}`;
-}
-
-updateLocalTime();
-setInterval(updateLocalTime, 1000);

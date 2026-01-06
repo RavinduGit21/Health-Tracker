@@ -3,11 +3,106 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:health_tracker/src/features/dashboard/dashboard_repository.dart';
 import 'package:health_tracker/src/utils/notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GoalsRepository {
   final Box _box;
+  final _supabase = Supabase.instance.client;
 
-  GoalsRepository(this._box);
+  RealtimeChannel? _settingsChannel;
+
+  GoalsRepository(this._box) {
+    _initRealtime();
+    _supabase.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.tokenRefreshed) {
+        _initRealtime();
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        _settingsChannel?.unsubscribe();
+        _settingsChannel = null;
+      }
+    });
+  }
+
+  void _initRealtime() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    _settingsChannel?.unsubscribe();
+    _settingsChannel = _supabase
+        .channel('public:user_settings')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'user_settings',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+             if (payload.newRecord != null) {
+               final rec = payload.newRecord;
+               _box.put(waterGoalKey, rec['water_goal']);
+               _box.put(sugarLimitKey, rec['sugar_limit']);
+               _box.put(remindersKey, rec['reminders_enabled']);
+               _box.put(sugarModeKey, rec['sugar_tracking_mode']);
+               _box.put(reminderStartKey, rec['reminder_start_hour']);
+               _box.put(reminderEndKey, rec['reminder_end_hour']);
+               _box.put(reminderIntervalKey, rec['reminder_interval']);
+               _box.put(targetWeightKey, (rec['target_weight'] as num?)?.toDouble());
+               _box.put(weightUnitKey, rec['weight_unit']);
+               _box.put(challengeStartKey, rec['challenge_start_date']);
+             }
+          },
+        );
+    _settingsChannel?.subscribe();
+  }
+
+  Future<void> _saveSettings() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      await _supabase.from('user_settings').upsert({
+        'user_id': user.id,
+        'water_goal': getWaterGoal(),
+        'sugar_limit': getSugarLimit(),
+        'reminders_enabled': getRemindersEnabled(),
+        'sugar_tracking_mode': getSugarTrackingMode(),
+        'reminder_start_hour': getReminderStartHour(),
+        'reminder_end_hour': getReminderEndHour(),
+        'reminder_interval': getReminderInterval(),
+        'target_weight': getTargetWeight(),
+        'weight_unit': getWeightUnit(),
+        'challenge_start_date': getChallengeStartDate(),
+      });
+    } catch (e) {
+      print("Settings sync failed: $e");
+    }
+  }
+
+  Future<void> syncRemote() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final response = await _supabase.from('user_settings').select().eq('user_id', user.id).maybeSingle();
+      if (response != null) {
+        await _box.put(waterGoalKey, response['water_goal']);
+        await _box.put(sugarLimitKey, response['sugar_limit']);
+        await _box.put(remindersKey, response['reminders_enabled']);
+        await _box.put(sugarModeKey, response['sugar_tracking_mode']);
+        await _box.put(reminderStartKey, response['reminder_start_hour']);
+        await _box.put(reminderEndKey, response['reminder_end_hour']);
+        await _box.put(reminderIntervalKey, response['reminder_interval']);
+        await _box.put(targetWeightKey, (response['target_weight'] as num?)?.toDouble());
+        await _box.put(weightUnitKey, response['weight_unit']);
+        await _box.put(challengeStartKey, response['challenge_start_date']);
+      }
+    } catch (e) {
+      print("Settings pull failed: $e");
+    }
+  }
 
   static const String waterGoalKey = 'water_goal';
   static const String sugarLimitKey = 'sugar_limit';
@@ -22,34 +117,64 @@ class GoalsRepository {
   static const String challengeStartKey = 'challenge_start_date';
 
   int getWaterGoal() => _box.get(waterGoalKey, defaultValue: 2000);
-  Future<void> setWaterGoal(int value) => _box.put(waterGoalKey, value);
+  Future<void> setWaterGoal(int value) async {
+    await _box.put(waterGoalKey, value);
+    await _saveSettings();
+  }
 
   int getSugarLimit() => _box.get(sugarLimitKey, defaultValue: 38);
-  Future<void> setSugarLimit(int value) => _box.put(sugarLimitKey, value);
+  Future<void> setSugarLimit(int value) async {
+    await _box.put(sugarLimitKey, value);
+    await _saveSettings();
+  }
 
   bool getRemindersEnabled() => _box.get(remindersKey, defaultValue: true);
-  Future<void> setRemindersEnabled(bool value) => _box.put(remindersKey, value);
+  Future<void> setRemindersEnabled(bool value) async {
+    await _box.put(remindersKey, value);
+    await _saveSettings();
+  }
 
   String getSugarTrackingMode() => _box.get(sugarModeKey, defaultValue: 'added');
-  Future<void> setSugarTrackingMode(String value) => _box.put(sugarModeKey, value);
+  Future<void> setSugarTrackingMode(String value) async {
+    await _box.put(sugarModeKey, value);
+    await _saveSettings();
+  }
 
   int getReminderStartHour() => _box.get(reminderStartKey, defaultValue: 9);
-  Future<void> setReminderStartHour(int value) => _box.put(reminderStartKey, value);
+  Future<void> setReminderStartHour(int value) async {
+    await _box.put(reminderStartKey, value);
+    await _saveSettings();
+  }
 
   int getReminderEndHour() => _box.get(reminderEndKey, defaultValue: 20); // 8 PM
-  Future<void> setReminderEndHour(int value) => _box.put(reminderEndKey, value);
+  Future<void> setReminderEndHour(int value) async {
+    await _box.put(reminderEndKey, value);
+    await _saveSettings();
+  }
 
   int getReminderInterval() => _box.get(reminderIntervalKey, defaultValue: 2);
-  Future<void> setReminderInterval(int value) => _box.put(reminderIntervalKey, value);
+  Future<void> setReminderInterval(int value) async {
+    await _box.put(reminderIntervalKey, value);
+    await _saveSettings();
+  }
 
   double getTargetWeight() => _box.get(targetWeightKey, defaultValue: 70.0);
-  Future<void> setTargetWeight(double value) => _box.put(targetWeightKey, value);
+  Future<void> setTargetWeight(double value) async {
+    await _box.put(targetWeightKey, value);
+    await _saveSettings();
+  }
 
   String getWeightUnit() => _box.get(weightUnitKey, defaultValue: 'kg');
-  Future<void> setWeightUnit(String value) => _box.put(weightUnitKey, value);
+  Future<void> setWeightUnit(String value) async {
+    await _box.put(weightUnitKey, value);
+    await _saveSettings();
+  }
 
   String? getChallengeStartDate() => _box.get(challengeStartKey);
-  Future<void> setChallengeStartDate(String? value) => _box.put(challengeStartKey, value);
+  Future<void> setChallengeStartDate(String? value) async {
+    await _box.put(challengeStartKey, value);
+    await _saveSettings();
+  }
 }
 
 final goalsRepositoryProvider = Provider<GoalsRepository>((ref) {
@@ -87,6 +212,10 @@ class GoalsNotifier extends Notifier<GoalsState> {
   @override
   GoalsState build() {
     final repository = ref.read(goalsRepositoryProvider);
+    
+    // Auto-sync on load
+    repository.syncRemote().then((_) => ref.invalidateSelf());
+
     return GoalsState(
       waterGoal: repository.getWaterGoal(),
       sugarLimit: repository.getSugarLimit(),
