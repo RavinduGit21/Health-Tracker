@@ -39,6 +39,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final user = authRepo.currentUser;
     final isAdmin = authRepo.isAdmin(user?.email);
 
+    final streakAsync = ref.watch(sugarStreakProvider);
+    final challengeAsync = ref.watch(challengeProgressProvider(goalsState.challengeStartDate));
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -92,7 +95,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 padding: const EdgeInsets.all(16),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    _buildActivityCard(context, dailyLog, goalsState, ref),
+                    _buildActivityCard(context, dailyLog, goalsState, ref, streakAsync.value ?? 0, challengeAsync.value ?? {}),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -293,10 +296,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
 
-  Widget _buildActivityCard(BuildContext context, DailyLog log, GoalsState goals, WidgetRef ref) {
+  Widget _buildActivityCard(BuildContext context, DailyLog log, GoalsState goals, WidgetRef ref, int streak, Map<String, dynamic> challenge) {
     final repo = ref.read(dailyLogRepositoryProvider);
-    final streak = repo.getSugarStreak();
-    final challenge = repo.getChallengeProgress(goals.challengeStartDate);
 
     return Container(
       padding: const EdgeInsets.all(20),

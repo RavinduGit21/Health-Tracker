@@ -480,6 +480,12 @@ class DailyLogRepository {
     }
     if (date == _getTodayKey()) {
       _updateWidget(DailyLog(date: date, waterIntake: 0, sugarIntake: 0));
+      final goal = Hive.box('settings').get('water_goal', defaultValue: 2000);
+      await NotificationService().scheduleWaterReminders(
+        currentIntake: 0,
+        goal: goal,
+        unit: 'mL',
+      );
     }
   }
 
@@ -490,6 +496,12 @@ class DailyLogRepository {
       await _supabase.from('daily_logs').delete().eq('user_id', user.id);
     }
     _updateWidget(DailyLog(date: _getTodayKey(), waterIntake: 0, sugarIntake: 0));
+    final goal = Hive.box('settings').get('water_goal', defaultValue: 2000);
+    await NotificationService().scheduleWaterReminders(
+      currentIntake: 0,
+      goal: goal,
+      unit: 'mL',
+    );
   }
 }
 
@@ -539,6 +551,26 @@ final dailyLogByDateProvider = StreamProvider.autoDispose.family<DailyLog, Strin
   
   await for (final event in box.watch(key: date)) {
     yield getLog();
+  }
+});
+
+final sugarStreakProvider = StreamProvider.autoDispose<int>((ref) async* {
+  final repo = ref.watch(dailyLogRepositoryProvider);
+  final box = Hive.box('daily_logs');
+  
+  yield repo.getSugarStreak();
+  await for (final _ in box.watch()) {
+    yield repo.getSugarStreak();
+  }
+});
+
+final challengeProgressProvider = StreamProvider.autoDispose.family<Map<String, dynamic>, String>((ref, startDate) async* {
+  final repo = ref.watch(dailyLogRepositoryProvider);
+  final box = Hive.box('daily_logs');
+  
+  yield repo.getChallengeProgress(startDate);
+  await for (final _ in box.watch()) {
+    yield repo.getChallengeProgress(startDate);
   }
 });
 
