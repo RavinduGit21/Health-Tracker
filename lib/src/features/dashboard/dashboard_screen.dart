@@ -508,21 +508,27 @@ class AddEntrySheet extends ConsumerWidget {
           Text("Quick Add", style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 24),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildAddButton(context, "Water", "+250ml", Icons.water_drop, AppColors.primary, () {
-                repo.addWater(250);
-                // Refresh provider? The StreamProvider handles it automatically!
-                Navigator.pop(context);
-              }),
-              _buildAddButton(context, "Sugar", "+5g", Icons.cookie, AppColors.secondary, () {
-                repo.addSugar(5);
-                Navigator.pop(context);
-              }),
-              _buildAddButton(context, "Weight", "Log", Icons.monitor_weight, Colors.orange, () {
-                Navigator.pop(context);
-                context.push('/weight');
-              }),
+              Expanded(
+                child: _buildAddButton(context, "Water", "+250ml", Icons.water_drop, AppColors.primary, () {
+                  repo.addWater(250);
+                  Navigator.pop(context);
+                }),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildAddButton(context, "Sugar", "+5g", Icons.cookie, AppColors.secondary, () {
+                  repo.addSugar(5);
+                  Navigator.pop(context);
+                }),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildAddButton(context, "Weight", "Log", Icons.monitor_weight, Colors.orange, () {
+                  Navigator.pop(context);
+                  context.push('/weight');
+                }),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -555,19 +561,19 @@ class AddEntrySheet extends ConsumerWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 120,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withOpacity(0.5)),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 32),
+            Icon(icon, color: color, size: 28),
             const SizedBox(height: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text(value, style: TextStyle(color: color)),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), textAlign: TextAlign.center, maxLines: 1),
+            Text(value, style: TextStyle(color: color, fontSize: 11), textAlign: TextAlign.center, maxLines: 1),
           ],
         ),
       ),

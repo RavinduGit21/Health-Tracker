@@ -564,10 +564,15 @@ final sugarStreakProvider = StreamProvider.autoDispose<int>((ref) async* {
   }
 });
 
-final challengeProgressProvider = StreamProvider.autoDispose.family<Map<String, dynamic>, String>((ref, startDate) async* {
+final challengeProgressProvider = StreamProvider.autoDispose.family<Map<String, dynamic>, String?>((ref, startDate) async* {
   final repo = ref.watch(dailyLogRepositoryProvider);
   final box = Hive.box('daily_logs');
   
+  if (startDate == null) {
+    yield {'active': false};
+    return;
+  }
+
   yield repo.getChallengeProgress(startDate);
   await for (final _ in box.watch()) {
     yield repo.getChallengeProgress(startDate);
