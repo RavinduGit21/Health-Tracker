@@ -14,7 +14,7 @@ class MainLayout extends StatelessWidget {
     if (location.startsWith('/dashboard')) currentIndex = 0;
     else if (location.startsWith('/history')) currentIndex = 1;
     else if (location.startsWith('/weight')) currentIndex = 2;
-    // statistics and goals are separate or can be sub-items
+    else if (location.startsWith('/sleep')) currentIndex = 3;
 
     return Scaffold(
       body: child,
@@ -30,6 +30,9 @@ class MainLayout extends StatelessWidget {
               break;
             case 2:
               context.go('/weight');
+              break;
+            case 3:
+              context.go('/sleep');
               break;
           }
         },
@@ -50,6 +53,11 @@ class MainLayout extends StatelessWidget {
             icon: Icon(Icons.monitor_weight_outlined),
             selectedIcon: Icon(Icons.monitor_weight, color: AppColors.primary),
             label: 'Weight',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.nightlight_outlined),
+            selectedIcon: Icon(Icons.nightlight_round, color: AppColors.primary),
+            label: 'Sleep',
           ),
         ],
       ),
