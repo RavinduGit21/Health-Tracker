@@ -11,6 +11,9 @@ import 'package:health_tracker/src/utils/notification_service.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:health_tracker/src/constants/supabase_config.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:health_tracker/src/utils/widget_service.dart';
+import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +45,14 @@ void main() async {
     currentIntake: todayLog.waterIntake,
     goal: settingsBox.get('water_goal', defaultValue: 2000),
     unit: 'mL',
+  );
+
+  // Home Widget Setup
+  HomeWidget.registerBackgroundCallback(WidgetService.backgroundCallback);
+  final activeSleep = SleepRepository(Hive.box('sleep_logs')).getActiveSession();
+  await WidgetService.updateSleepWidget(
+    isSleeping: activeSleep != null,
+    startTime: activeSleep?.startTime,
   );
 
   runApp(

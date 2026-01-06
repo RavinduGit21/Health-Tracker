@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:health_tracker/src/features/goals/goals_repository.dart';
+import 'package:health_tracker/src/utils/widget_service.dart';
 
 class SleepLog {
   final String id;
@@ -129,6 +130,12 @@ class SleepRepository {
           await _box.delete(key);
         }
       }
+      
+      final active = getActiveSession();
+      await WidgetService.updateSleepWidget(
+        isSleeping: active != null,
+        startTime: active?.startTime,
+      );
     } catch (e) {
       print("Sleep sync failed: $e");
     }
@@ -157,6 +164,7 @@ class SleepRepository {
       startTime: DateTime.now(),
     );
     await _saveLog(log);
+    await WidgetService.updateSleepWidget(isSleeping: true, startTime: log.startTime);
   }
 
   Future<void> endSleep({
@@ -188,6 +196,7 @@ class SleepRepository {
     );
 
     await _saveLog(finishedLog);
+    await WidgetService.updateSleepWidget(isSleeping: false);
   }
 
   DateTime _suggestStartTime(DateTime wakeTime) {
