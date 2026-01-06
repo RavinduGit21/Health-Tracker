@@ -215,7 +215,6 @@ class _HistoryItem extends ConsumerWidget {
             },
             child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
           ),
-          const Spacer(),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
           ElevatedButton(
             onPressed: () {

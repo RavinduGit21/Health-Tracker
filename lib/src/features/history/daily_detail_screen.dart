@@ -127,7 +127,6 @@ class DailyDetailScreen extends ConsumerWidget {
             }, 
             child: const Text("DELETE", style: TextStyle(color: Colors.redAccent))
           ),
-          const Spacer(),
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
           ElevatedButton(
             onPressed: () {

@@ -12,11 +12,26 @@ import 'package:health_tracker/src/features/weight/weight_screen.dart';
 
 import 'package:health_tracker/src/features/authentication/auth_repository.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Auto-sync on load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(dailyLogRepositoryProvider).syncRemote();
+      ref.read(weightRepositoryProvider).syncRemote();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final dailyLogAsync = ref.watch(todayLogProvider);
     final goalsState = ref.watch(goalsProvider);
     final latestWeight = ref.watch(latestWeightProvider);
@@ -59,7 +74,7 @@ class DashboardScreen extends ConsumerWidget {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await ref.read(authRepositoryProvider).signOut();
-              if (context.mounted) context.go('/login');
+              if (mounted) context.go('/login');
             },
           ),
         ],
@@ -254,7 +269,6 @@ class DashboardScreen extends ConsumerWidget {
             }, 
             child: const Text("DELETE", style: TextStyle(color: Colors.redAccent))
           ),
-          const Spacer(),
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
           ElevatedButton(
             onPressed: () {

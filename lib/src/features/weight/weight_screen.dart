@@ -6,16 +6,40 @@ import 'package:health_tracker/src/features/weight/weight_repository.dart';
 import 'package:health_tracker/src/features/goals/goals_repository.dart';
 import 'package:intl/intl.dart';
 
-class WeightScreen extends ConsumerWidget {
+class WeightScreen extends ConsumerStatefulWidget {
   const WeightScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WeightScreen> createState() => _WeightScreenState();
+}
+
+class _WeightScreenState extends ConsumerState<WeightScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(weightRepositoryProvider).syncRemote();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final weightEntriesAsync = ref.watch(weightEntriesProvider);
     final goals = ref.watch(goalsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Weight Tracker")),
+      appBar: AppBar(
+        title: const Text("Weight Tracker"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            onPressed: () {
+              ref.read(weightRepositoryProvider).syncRemote();
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Syncing weights...")));
+            },
+          ),
+        ],
+      ),
       body: weightEntriesAsync.when(
         data: (entries) {
           if (entries.isEmpty) {
@@ -311,7 +335,6 @@ class WeightScreen extends ConsumerWidget {
               }, 
               child: const Text("DELETE", style: TextStyle(color: Colors.redAccent))
             ),
-            const Spacer(),
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
             ElevatedButton(
               onPressed: () async {
