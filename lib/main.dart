@@ -31,12 +31,17 @@ void main() async {
   final sharedPreferences = await SharedPreferences.getInstance();
   await NotificationService().init();
 
-  // Sync Data to Widget
-  if (kDebugMode) {
-    print("Syncing widget data...");
-  }
+  // Sync Data to Widget & Schedule Reminders
   final dailyLogRepo = DailyLogRepository(Hive.box('daily_logs'));
   await dailyLogRepo.updateWidgetWithCurrentData();
+  
+  final settingsBox = Hive.box('settings');
+  final todayLog = dailyLogRepo.getTodayLog();
+  await NotificationService().scheduleWaterReminders(
+    currentIntake: todayLog.waterIntake,
+    goal: settingsBox.get('water_goal', defaultValue: 2000),
+    unit: 'mL',
+  );
 
   runApp(
     ProviderScope(

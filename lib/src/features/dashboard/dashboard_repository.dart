@@ -5,15 +5,30 @@ import 'package:health_tracker/src/utils/notification_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LogEntry {
+  final String id;
   final String time;
   final String description;
   final int amount; // mL for water, g for sugar
   final String type; // 'water' or 'sugar'
 
-  LogEntry({required this.time, required this.description, required this.amount, required this.type});
+  LogEntry({
+    required this.id,
+    required this.time, 
+    required this.description, 
+    required this.amount, 
+    required this.type
+  });
 
-  Map<String, dynamic> toMap() => {'time': time, 'description': description, 'amount': amount, 'type': type};
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'time': time, 
+    'description': description, 
+    'amount': amount, 
+    'type': type
+  };
+
   factory LogEntry.fromMap(Map<dynamic, dynamic> map) => LogEntry(
+    id: map['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
     time: map['time'] ?? '',
     description: map['description'] ?? '',
     amount: map['amount'] ?? 0,
@@ -186,6 +201,7 @@ class DailyLogRepository {
   Future<void> addWater(int amount, {String description = "Water"}) async {
     final currentLog = getTodayLog();
     final newEntry = LogEntry(
+      id: "w_${DateTime.now().millisecondsSinceEpoch}",
       time: DateFormat.jm().format(DateTime.now()),
       description: description,
       amount: amount,
@@ -195,14 +211,36 @@ class DailyLogRepository {
       waterIntake: currentLog.waterIntake + amount,
       entries: [...currentLog.entries, newEntry],
     );
+    
+    // Check if goal was reached with this sip
+    final settings = Hive.box('settings');
+    final goal = settings.get('water_goal', defaultValue: 2000);
+    final previouslyReached = currentLog.waterIntake >= goal;
+    final nowReached = newLog.waterIntake >= goal;
+
     await _saveLog(newLog);
     _updateWidget(newLog);
-    await NotificationService().scheduleReminders();
+    
+    // Type 4: Goal Completed Notification (Instant)
+    if (!previouslyReached && nowReached) {
+      await NotificationService().showNotification(
+        title: 'Goal Completed! 🥳',
+        body: 'Great job! You reached your water goal today 🎉',
+      );
+    }
+
+    // Update all other schedules (1, 2, 3, 5)
+    await NotificationService().scheduleWaterReminders(
+      currentIntake: newLog.waterIntake,
+      goal: goal,
+      unit: 'mL',
+    );
   }
 
   Future<void> addSugar(int amount, {String description = "Sugar"}) async {
     final currentLog = getTodayLog();
     final newEntry = LogEntry(
+      id: "s_${DateTime.now().millisecondsSinceEpoch}",
       time: DateFormat.jm().format(DateTime.now()),
       description: description,
       amount: amount,
@@ -214,6 +252,62 @@ class DailyLogRepository {
     );
     await _saveLog(newLog);
     _updateWidget(newLog);
+  }
+
+  Future<void> deleteLogEntry(String date, String entryId) async {
+    final data = _box.get(date);
+    if (data == null) return;
+    
+    final log = DailyLog.fromMap(data);
+    final entry = log.entries.firstWhere((e) => e.id == entryId);
+    
+    final updatedEntries = log.entries.where((e) => e.id != entryId).toList();
+    final updatedLog = log.copyWith(
+      waterIntake: entry.type == 'water' ? (log.waterIntake - entry.amount) : log.waterIntake,
+      sugarIntake: entry.type == 'sugar' ? (log.sugarIntake - entry.amount) : log.sugarIntake,
+      entries: updatedEntries,
+    );
+    
+    await _saveLog(updatedLog);
+    if (date == _getTodayKey()) {
+      _updateWidget(updatedLog);
+      final goal = Hive.box('settings').get('water_goal', defaultValue: 2000);
+      await NotificationService().scheduleWaterReminders(
+        currentIntake: updatedLog.waterIntake,
+        goal: goal,
+        unit: 'mL',
+      );
+    }
+  }
+
+  Future<void> editLogEntry(String date, LogEntry updatedEntry) async {
+    final data = _box.get(date);
+    if (data == null) return;
+    
+    final log = DailyLog.fromMap(data);
+    final index = log.entries.indexWhere((e) => e.id == updatedEntry.id);
+    if (index == -1) return;
+    
+    final oldEntry = log.entries[index];
+    final updatedEntries = List<LogEntry>.from(log.entries);
+    updatedEntries[index] = updatedEntry;
+    
+    final updatedLog = log.copyWith(
+      waterIntake: log.waterIntake - (oldEntry.type == 'water' ? oldEntry.amount : 0) + (updatedEntry.type == 'water' ? updatedEntry.amount : 0),
+      sugarIntake: log.sugarIntake - (oldEntry.type == 'sugar' ? oldEntry.amount : 0) + (updatedEntry.type == 'sugar' ? updatedEntry.amount : 0),
+      entries: updatedEntries,
+    );
+    
+    await _saveLog(updatedLog);
+    if (date == _getTodayKey()) {
+      _updateWidget(updatedLog);
+      final goal = Hive.box('settings').get('water_goal', defaultValue: 2000);
+      await NotificationService().scheduleWaterReminders(
+        currentIntake: updatedLog.waterIntake,
+        goal: goal,
+        unit: 'mL',
+      );
+    }
   }
 
   Future<void> _saveLog(DailyLog log) async {
@@ -373,6 +467,15 @@ class DailyLogRepository {
     if (date == _getTodayKey()) {
       _updateWidget(DailyLog(date: date, waterIntake: 0, sugarIntake: 0));
     }
+  }
+
+  Future<void> clearAllData() async {
+    await _box.clear();
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      await _supabase.from('daily_logs').delete().eq('user_id', user.id);
+    }
+    _updateWidget(DailyLog(date: _getTodayKey(), waterIntake: 0, sugarIntake: 0));
   }
 }
 

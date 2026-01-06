@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_tracker/src/constants/app_colors.dart';
 import 'package:health_tracker/src/features/goals/goals_repository.dart';
+import 'package:health_tracker/src/features/dashboard/dashboard_repository.dart';
+import 'package:health_tracker/src/features/weight/weight_repository.dart';
 import 'package:health_tracker/src/utils/notification_service.dart';
 import 'package:intl/intl.dart';
 
@@ -102,76 +104,20 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
                  ref.read(goalsProvider.notifier).setRemindersEnabled(val);
                  if (val) {
                    NotificationService().showNotification(title: "Reminders Enabled", body: "We will remind you to drink water!");
-                   NotificationService().scheduleReminders();
+                   // Trigger schedule via goal update or direct call if needed, 
+                   // but usually goal update handles it. 
+                   // Let's force a refresh using current goal
+                   final repo = ref.read(dailyLogRepositoryProvider); 
+                   NotificationService().scheduleWaterReminders(
+                      currentIntake: repo.getTodayLog().waterIntake,
+                      goal: goalsState.waterGoal,
+                      unit: 'mL'
+                   );
                  } else {
-                   NotificationService().cancelReminders();
+                   NotificationService().cancelAll();
                  }
               },
             ),
-            if (goalsState.remindersEnabled) ...[
-              const SizedBox(height: 16),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceDark,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Start Time"),
-                        DropdownButton<int>(
-                          value: goalsState.reminderStartHour,
-                          items: List.generate(24, (i) => DropdownMenuItem(value: i, child: Text("${i.toString().padLeft(2, '0')}:00"))),
-                          onChanged: (val) {
-                            if (val != null) {
-                              ref.read(goalsProvider.notifier).updateReminderSettings(val, goalsState.reminderEndHour, goalsState.reminderInterval);
-                              NotificationService().scheduleReminders();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("End Time"),
-                        DropdownButton<int>(
-                          value: goalsState.reminderEndHour,
-                          items: List.generate(24, (i) => DropdownMenuItem(value: i, child: Text("${i.toString().padLeft(2, '0')}:00"))),
-                          onChanged: (val) {
-                            if (val != null) {
-                               ref.read(goalsProvider.notifier).updateReminderSettings(goalsState.reminderStartHour, val, goalsState.reminderInterval);
-                               NotificationService().scheduleReminders();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Interval"),
-                        DropdownButton<int>(
-                          value: goalsState.reminderInterval,
-                          items: [1, 2, 3, 4, 6].map((i) => DropdownMenuItem(value: i, child: Text("Every $i hours"))).toList(),
-                          onChanged: (val) {
-                             if (val != null) {
-                               ref.read(goalsProvider.notifier).updateReminderSettings(goalsState.reminderStartHour, goalsState.reminderEndHour, val);
-                               NotificationService().scheduleReminders();
-                             }
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
             const SizedBox(height: 24),
             _buildChallengePicker(context, goalsState, ref),
             const SizedBox(height: 24),
@@ -195,8 +141,44 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
                 child: const Text("SAVE GOALS"),
               ),
             ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _showResetConfirmation,
+                icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                label: const Text("RESET ALL DATA", style: TextStyle(color: Colors.redAccent)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.redAccent),
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showResetConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Reset All Data?"),
+        content: const Text("This will permanently delete all your water, sugar, and weight logs from this device and the cloud. This action cannot be undone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+          TextButton(
+            onPressed: () async {
+              await ref.read(dailyLogRepositoryProvider).clearAllData();
+              await ref.read(weightRepositoryProvider).clearAllData();
+              if (mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("All data has been reset.")));
+              }
+            }, 
+            child: const Text("RESET", style: TextStyle(color: Colors.redAccent))
+          ),
+        ],
       ),
     );
   }

@@ -135,6 +135,19 @@ class WeightRepository {
       await _supabase.from('weight_logs').delete().eq('user_id', user.id).eq('date', date);
     }
   }
+
+  Future<void> updateWeight(String date, double weight, {String? note}) async {
+    final entry = WeightEntry(date: date, weight: weight, note: note);
+    await _saveEntry(entry);
+  }
+
+  Future<void> clearAllData() async {
+    await _box.clear();
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      await _supabase.from('weight_logs').delete().eq('user_id', user.id);
+    }
+  }
 }
 
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:health_tracker/src/features/dashboard/dashboard_repository.dart';
+import 'package:health_tracker/src/utils/notification_service.dart';
 
 class GoalsRepository {
   final Box _box;
@@ -129,6 +131,14 @@ class GoalsNotifier extends Notifier<GoalsState> {
   Future<void> updateWaterGoal(int value) async {
     await ref.read(goalsRepositoryProvider).setWaterGoal(value);
     state = _textStateWith(waterGoal: value);
+    
+    // Update notifications with new goal
+    final todayLog = ref.read(dailyLogRepositoryProvider).getTodayLog();
+    await NotificationService().scheduleWaterReminders(
+      currentIntake: todayLog.waterIntake,
+      goal: value,
+      unit: 'mL',
+    );
   }
 
   Future<void> updateSugarLimit(int value) async {

@@ -108,7 +108,7 @@ class DashboardScreen extends ConsumerWidget {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final entry = dailyLog.entries.reversed.toList()[index];
-                        return _buildTimelineEntry(context, entry);
+                        return _buildTimelineEntry(context, entry, dailyLog.date, ref);
                       },
                       childCount: dailyLog.entries.length,
                     ),
@@ -158,45 +158,111 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTimelineEntry(BuildContext context, LogEntry entry) {
+  Widget _buildTimelineEntry(BuildContext context, LogEntry entry, String date, WidgetRef ref) {
     final isWater = entry.type == 'water';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
+    final repo = ref.read(dailyLogRepositoryProvider);
+
+    return Dismissible(
+      key: Key(entry.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Colors.redAccent,
+        child: const Icon(Icons.delete, color: Colors.white),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: (isWater ? AppColors.primary : AppColors.secondary).withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isWater ? Icons.water_drop : Icons.cookie,
-              color: isWater ? AppColors.primary : AppColors.secondary,
-              size: 16,
-            ),
+      onDismissed: (_) {
+        repo.deleteLogEntry(date, entry.id);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${entry.description} deleted")));
+      },
+      child: InkWell(
+        onTap: () => _showEditEntryDialog(context, ref, date, entry),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(entry.description, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                Text(entry.time, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              ],
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (isWater ? AppColors.primary : AppColors.secondary).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isWater ? Icons.water_drop : Icons.cookie,
+                  color: isWater ? AppColors.primary : AppColors.secondary,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(entry.description, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(entry.time, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Text(
+                "${entry.amount > 0 ? '+' : ''}${entry.amount} ${isWater ? 'mL' : 'g'}",
+                style: TextStyle(
+                  color: isWater ? AppColors.primary : AppColors.secondary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
-          Text(
-            "${entry.amount > 0 ? '+' : ''}${entry.amount} ${isWater ? 'mL' : 'g'}",
-            style: TextStyle(
-              color: isWater ? AppColors.primary : AppColors.secondary,
-              fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  void _showEditEntryDialog(BuildContext context, WidgetRef ref, String date, LogEntry entry) {
+    final amountController = TextEditingController(text: entry.amount.toString());
+    final descController = TextEditingController(text: entry.description);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Edit ${entry.type == 'water' ? 'Water' : 'Sugar'} Entry"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(labelText: "Description"),
             ),
+            TextField(
+              controller: amountController,
+              decoration: InputDecoration(labelText: "Amount (${entry.type == 'water' ? 'mL' : 'g'})"),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+          ElevatedButton(
+            onPressed: () {
+              final amount = int.tryParse(amountController.text);
+              if (amount != null) {
+                final updated = LogEntry(
+                  id: entry.id,
+                  time: entry.time,
+                  description: descController.text,
+                  amount: amount,
+                  type: entry.type,
+                );
+                ref.read(dailyLogRepositoryProvider).editLogEntry(date, updated);
+                Navigator.pop(context);
+              }
+            }, 
+            child: const Text("SAVE")
           ),
         ],
       ),

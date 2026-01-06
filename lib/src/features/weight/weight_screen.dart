@@ -42,7 +42,7 @@ class WeightScreen extends ConsumerWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final entry = entries[index];
-                    return _buildWeightItem(context, entry, goals);
+                    return _buildWeightItem(context, entry, goals, ref);
                   },
                 ),
               ],
@@ -203,38 +203,101 @@ class WeightScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildWeightItem(BuildContext context, WeightEntry entry, GoalsState goals) {
+  Widget _buildWeightItem(BuildContext context, WeightEntry entry, GoalsState goals, WidgetRef ref) {
     final date = DateTime.tryParse(entry.date) ?? DateTime.now();
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
+    final repo = ref.read(weightRepositoryProvider);
+
+    return Dismissible(
+      key: Key(entry.date),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Colors.redAccent,
+        child: const Icon(Icons.delete, color: Colors.white),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.orangeAccent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.monitor_weight_outlined, color: Colors.orangeAccent, size: 20),
+      onDismissed: (_) {
+        repo.deleteEntry(entry.date);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Entry for ${DateFormat('MMM d').format(date)} deleted")));
+      },
+      child: InkWell(
+        onTap: () => _showEditWeightDialog(context, ref, entry),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(DateFormat('MMM d, yyyy').format(date), style: const TextStyle(fontWeight: FontWeight.bold)),
-                if (entry.note != null && entry.note!.isNotEmpty)
-                  Text(entry.note!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              ],
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orangeAccent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.monitor_weight_outlined, color: Colors.orangeAccent, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(DateFormat('MMM d, yyyy').format(date), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    if (entry.note != null && entry.note!.isNotEmpty)
+                      Text(entry.note!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Text(
+                "${entry.weight} ${goals.weightUnit}",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
           ),
-          Text(
-            "${entry.weight} ${goals.weightUnit}",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+    );
+  }
+
+  void _showEditWeightDialog(BuildContext context, WidgetRef ref, WeightEntry entry) {
+    final weightController = TextEditingController(text: entry.weight.toString());
+    final noteController = TextEditingController(text: entry.note);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Edit Weight (${entry.date})"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: weightController,
+              decoration: InputDecoration(labelText: "Weight (${ref.read(goalsProvider).weightUnit})"),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(labelText: "Note (optional)"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+          ElevatedButton(
+            onPressed: () {
+              final weight = double.tryParse(weightController.text);
+              if (weight != null) {
+                ref.read(weightRepositoryProvider).updateWeight(
+                  entry.date, 
+                  weight, 
+                  note: noteController.text.isEmpty ? null : noteController.text
+                );
+                Navigator.pop(context);
+              }
+            }, 
+            child: const Text("SAVE")
           ),
         ],
       ),
