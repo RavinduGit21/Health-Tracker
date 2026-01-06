@@ -9,6 +9,7 @@ import 'package:health_tracker/src/features/history/daily_detail_screen.dart';
 import 'package:health_tracker/src/features/nutrition/food_search_sheet.dart';
 import 'package:health_tracker/src/features/weight/weight_repository.dart';
 import 'package:health_tracker/src/features/weight/weight_screen.dart';
+import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
 
 import 'package:health_tracker/src/features/authentication/auth_repository.dart';
 
@@ -27,6 +28,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(dailyLogRepositoryProvider).syncRemote();
       ref.read(weightRepositoryProvider).syncRemote();
+      ref.read(sleepRepositoryProvider).syncRemote();
     });
   }
 
@@ -66,6 +68,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             onPressed: () {
               ref.read(dailyLogRepositoryProvider).syncRemote();
               ref.read(weightRepositoryProvider).syncRemote();
+              ref.read(sleepRepositoryProvider).syncRemote();
                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Syncing with cloud...")));
             },
           ),
@@ -106,6 +109,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildWeightCard(context, latestWeight, goalsState),
+                    const SizedBox(height: 16),
+                    _buildSleepCard(context, ref.watch(activeSleepSessionProvider)),
                     const SizedBox(height: 24),
                     Text("Today's Timeline", style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 12),
@@ -488,6 +493,53 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
+
+  Widget _buildSleepCard(BuildContext context, SleepLog? activeSession) {
+    final bool isSleeping = activeSession != null;
+    return InkWell(
+      onTap: () => context.push('/sleep'),
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.indigo.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                isSleeping ? Icons.nightlight_round : Icons.bedtime_outlined, 
+                color: Colors.indigoAccent
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Text("Sleep Tracking", style: Theme.of(context).textTheme.titleMedium),
+                   Text(
+                     isSleeping ? "Currently Sleeping..." : "Track your rest",
+                     style: const TextStyle(color: AppColors.textSecondary)
+                   ),
+                ],
+              ),
+            ),
+            if (isSleeping)
+              const Icon(Icons.circle, color: Colors.indigoAccent, size: 12),
+            const Icon(Icons.chevron_right, color: Colors.white24),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class AddEntrySheet extends ConsumerWidget {
@@ -527,6 +579,13 @@ class AddEntrySheet extends ConsumerWidget {
                 child: _buildAddButton(context, "Weight", "Log", Icons.monitor_weight, Colors.orange, () {
                   Navigator.pop(context);
                   context.push('/weight');
+                }),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildAddButton(context, "Sleep", "Track", Icons.bedtime, Colors.indigoAccent, () {
+                  Navigator.pop(context);
+                  context.push('/sleep');
                 }),
               ),
             ],

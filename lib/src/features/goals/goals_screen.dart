@@ -18,6 +18,8 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
   late TextEditingController _waterController;
   late TextEditingController _sugarController;
   late TextEditingController _weightController;
+  late TextEditingController _sleepGoalController;
+  late String _usualBedtime;
   
   @override
   void initState() {
@@ -27,6 +29,8 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
     _waterController = TextEditingController(text: currentGoals.waterGoal.toString());
     _sugarController = TextEditingController(text: currentGoals.sugarLimit.toString());
     _weightController = TextEditingController(text: currentGoals.targetWeight.toString());
+    _sleepGoalController = TextEditingController(text: currentGoals.sleepGoal.toString());
+    _usualBedtime = currentGoals.usualBedtime;
   }
 
   @override
@@ -62,6 +66,16 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
               Icons.monitor_weight, 
               Colors.orange
             ),
+            const SizedBox(height: 16),
+            _buildGoalInput(
+              context, 
+              "Sleep Goal (Hours)", 
+              _sleepGoalController, 
+              Icons.bedtime, 
+              Colors.indigoAccent
+            ),
+            const SizedBox(height: 16),
+            _buildTimePickerTile("Usual Bedtime", _usualBedtime),
             const SizedBox(height: 24),
             Text("Sugar Tracking Mode", style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
@@ -183,6 +197,48 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
     );
   }
 
+  Widget _buildTimePickerTile(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.access_time, color: Colors.indigoAccent),
+              ),
+              const SizedBox(width: 16),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          TextButton(
+            onPressed: () async {
+              final parts = value.split(':');
+              final time = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
+              );
+              if (time != null) {
+                setState(() => _usualBedtime = "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}");
+              }
+            },
+            child: Text(_usualBedtime, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigoAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildChallengePicker(BuildContext context, GoalsState state, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -237,11 +293,14 @@ class _GoalsScreenState extends ConsumerState<GoalsScreen> {
     final water = int.tryParse(_waterController.text) ?? 2000;
     final sugar = int.tryParse(_sugarController.text) ?? 38;
     final weight = double.tryParse(_weightController.text) ?? 70.0;
+    final sleepGoal = int.tryParse(_sleepGoalController.text) ?? 8;
 
     final notifier = ref.read(goalsProvider.notifier);
     await notifier.updateWaterGoal(water);
     await notifier.updateSugarLimit(sugar);
     await notifier.updateTargetWeight(weight);
+    await notifier.updateSleepGoal(sleepGoal);
+    await notifier.updateUsualBedtime(_usualBedtime);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Goals saved!")));

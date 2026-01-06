@@ -26,6 +26,7 @@ void main() async {
   await Hive.openBox('settings');
   await Hive.openBox('daily_logs');
   await Hive.openBox('weight_logs');
+  await Hive.openBox('sleep_logs');
 
   // Initialize Services
   final sharedPreferences = await SharedPreferences.getInstance();

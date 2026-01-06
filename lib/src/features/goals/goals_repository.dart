@@ -75,6 +75,8 @@ class GoalsRepository {
         'target_weight': getTargetWeight(),
         'weight_unit': getWeightUnit(),
         'challenge_start_date': getChallengeStartDate(),
+        'sleep_goal': getSleepGoal(),
+        'usual_bedtime': getUsualBedtime(),
       });
     } catch (e) {
       print("Settings sync failed: $e");
@@ -98,6 +100,8 @@ class GoalsRepository {
         await _box.put(targetWeightKey, (response['target_weight'] as num?)?.toDouble());
         await _box.put(weightUnitKey, response['weight_unit']);
         await _box.put(challengeStartKey, response['challenge_start_date']);
+        await _box.put(sleepGoalKey, response['sleep_goal']);
+        await _box.put(usualBedtimeKey, response['usual_bedtime']);
       }
     } catch (e) {
       print("Settings pull failed: $e");
@@ -115,6 +119,8 @@ class GoalsRepository {
   static const String targetWeightKey = 'target_weight';
   static const String weightUnitKey = 'weight_unit';
   static const String challengeStartKey = 'challenge_start_date';
+  static const String sleepGoalKey = 'sleep_goal';
+  static const String usualBedtimeKey = 'usual_bedtime';
 
   int getWaterGoal() => _box.get(waterGoalKey, defaultValue: 2000);
   Future<void> setWaterGoal(int value) async {
@@ -175,6 +181,18 @@ class GoalsRepository {
     await _box.put(challengeStartKey, value);
     await _saveSettings();
   }
+
+  int getSleepGoal() => _box.get(sleepGoalKey, defaultValue: 8);
+  Future<void> setSleepGoal(int value) async {
+    await _box.put(sleepGoalKey, value);
+    await _saveSettings();
+  }
+
+  String getUsualBedtime() => _box.get(usualBedtimeKey, defaultValue: '22:30');
+  Future<void> setUsualBedtime(String value) async {
+    await _box.put(usualBedtimeKey, value);
+    await _saveSettings();
+  }
 }
 
 final goalsRepositoryProvider = Provider<GoalsRepository>((ref) {
@@ -193,6 +211,8 @@ class GoalsState {
   final double targetWeight;
   final String weightUnit;
   final String? challengeStartDate;
+  final int sleepGoal;
+  final String usualBedtime;
 
   GoalsState({
     required this.waterGoal, 
@@ -205,6 +225,8 @@ class GoalsState {
     required this.targetWeight,
     required this.weightUnit,
     this.challengeStartDate,
+    required this.sleepGoal,
+    required this.usualBedtime,
   });
 }
 
@@ -227,6 +249,8 @@ class GoalsNotifier extends Notifier<GoalsState> {
       targetWeight: repository.getTargetWeight(),
       weightUnit: repository.getWeightUnit(),
       challengeStartDate: repository.getChallengeStartDate(),
+      sleepGoal: repository.getSleepGoal(),
+      usualBedtime: repository.getUsualBedtime(),
     );
   }
 
@@ -250,6 +274,8 @@ class GoalsNotifier extends Notifier<GoalsState> {
       targetWeight: state.targetWeight,
       weightUnit: state.weightUnit,
       challengeStartDate: state.challengeStartDate,
+      sleepGoal: state.sleepGoal,
+      usualBedtime: state.usualBedtime,
     );
   }
 
@@ -300,6 +326,16 @@ class GoalsNotifier extends Notifier<GoalsState> {
     state = _textStateWith(challengeStartDate: value);
   }
 
+  Future<void> updateSleepGoal(int value) async {
+    await ref.read(goalsRepositoryProvider).setSleepGoal(value);
+    state = _textStateWith(sleepGoal: value);
+  }
+
+  Future<void> updateUsualBedtime(String value) async {
+    await ref.read(goalsRepositoryProvider).setUsualBedtime(value);
+    state = _textStateWith(usualBedtime: value);
+  }
+
   GoalsState _textStateWith({
     int? waterGoal, 
     int? sugarLimit, 
@@ -311,6 +347,8 @@ class GoalsNotifier extends Notifier<GoalsState> {
     double? targetWeight,
     String? weightUnit,
     String? challengeStartDate,
+    int? sleepGoal,
+    String? usualBedtime,
   }) {
     return GoalsState(
       waterGoal: waterGoal ?? state.waterGoal,
@@ -323,6 +361,8 @@ class GoalsNotifier extends Notifier<GoalsState> {
       targetWeight: targetWeight ?? state.targetWeight,
       weightUnit: weightUnit ?? state.weightUnit,
       challengeStartDate: challengeStartDate ?? state.challengeStartDate,
+      sleepGoal: sleepGoal ?? state.sleepGoal,
+      usualBedtime: usualBedtime ?? state.usualBedtime,
     );
   }
 }

@@ -8,6 +8,7 @@ import 'package:health_tracker/src/features/history/history_screen.dart';
 import 'package:health_tracker/src/features/history/statistics_screen.dart';
 import 'package:health_tracker/src/features/onboarding/onboarding_screen.dart';
 import 'package:health_tracker/src/features/weight/weight_screen.dart';
+import 'package:health_tracker/src/features/sleep/sleep_screen.dart';
 
 import 'package:health_tracker/src/features/authentication/auth_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,6 +69,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/weight',
             builder: (context, state) => const WeightScreen(),
+            redirect: (context, state) {
+              final user = authRepo.currentUser;
+              if (user == null) return '/login';
+              return null;
+            },
+          ),
+          GoRoute(
+            path: '/sleep',
+            builder: (context, state) => const SleepScreen(),
             redirect: (context, state) {
               final user = authRepo.currentUser;
               if (user == null) return '/login';
