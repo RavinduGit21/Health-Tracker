@@ -1,28 +1,28 @@
 const STORAGE_KEY = 'health_tracker_v1';
 
-function pad2(n){ return String(n).padStart(2,'0'); }
-function toISODateLocal(d){
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toISODateLocal(d) {
   const year = d.getFullYear();
   const month = pad2(d.getMonth() + 1);
   const day = pad2(d.getDate());
   return `${year}-${month}-${day}`;
 }
 
-function parseISODateLocal(iso){
-  const [y,m,d] = iso.split('-').map(Number);
+function parseISODateLocal(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 
-function addDays(isoDate, delta){
+function addDays(isoDate, delta) {
   const d = parseISODateLocal(isoDate);
   d.setDate(d.getDate() + delta);
   return toISODateLocal(d);
 }
 
-function loadState(){
-  try{
+function loadState() {
+  try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return { settings: { waterGoalMl: 2000, challengeStart: '' }, entries: {}, weights: {} };
+    if (!raw) return { settings: { waterGoalMl: 2000, challengeStart: '' }, entries: {}, weights: {} };
     const parsed = JSON.parse(raw);
     return {
       settings: {
@@ -32,16 +32,16 @@ function loadState(){
       entries: parsed?.entries && typeof parsed.entries === 'object' ? parsed.entries : {},
       weights: parsed?.weights && typeof parsed.weights === 'object' ? parsed.weights : {}
     };
-  }catch{
+  } catch {
     return { settings: { waterGoalMl: 2000, challengeStart: '' }, entries: {}, weights: {} };
   }
 }
 
-function saveState(state){
+function saveState(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function defaultEntry(){
+function defaultEntry() {
   return {
     sugarCut: false,
     workoutDone: false,
@@ -49,26 +49,30 @@ function defaultEntry(){
     workoutNotes: '',
     notes: '',
     waterMl: 0,
+    sugarG: 0,
+    logs: [], // Each item: { id, time, type, amount, description }
     updatedAt: new Date().toISOString()
   };
 }
 
-function getEntry(state, isoDate){
+function getEntry(state, isoDate) {
   const existing = state.entries[isoDate];
-  if(existing && typeof existing === 'object'){
+  if (existing && typeof existing === 'object') {
     return {
       ...defaultEntry(),
       ...existing,
       waterMl: Number(existing.waterMl ?? 0),
+      sugarG: Number(existing.sugarG ?? 0),
       caloriesBurned: Number(existing.caloriesBurned ?? 100),
       sugarCut: Boolean(existing.sugarCut),
       workoutDone: Boolean(existing.workoutDone),
+      logs: Array.isArray(existing.logs) ? existing.logs : []
     };
   }
   return defaultEntry();
 }
 
-function setEntry(state, isoDate, entry){
+function setEntry(state, isoDate, entry) {
   state.entries[isoDate] = {
     ...entry,
     waterMl: Math.max(0, Number(entry.waterMl ?? 0)),
@@ -77,9 +81,9 @@ function setEntry(state, isoDate, entry){
   };
 }
 
-function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
-function downloadJSON(filename, obj){
+function downloadJSON(filename, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -91,38 +95,38 @@ function downloadJSON(filename, obj){
   URL.revokeObjectURL(url);
 }
 
-function formatYesNo(v){ return v ? 'Yes' : 'No'; }
+function formatYesNo(v) { return v ? 'Yes' : 'No'; }
 
-function computeSugarStreak(state, asOfDate){
+function computeSugarStreak(state, asOfDate) {
   // Streak counts consecutive sugarCut=true days ending at asOfDate.
   let count = 0;
   let cursor = asOfDate;
-  while(true){
+  while (true) {
     const e = getEntry(state, cursor);
-    if(!e.sugarCut) break;
+    if (!e.sugarCut) break;
     count++;
     cursor = addDays(cursor, -1);
-    if(count > 3650) break;
+    if (count > 3650) break;
   }
   return count;
 }
 
-function getLastNDates(endIso, n){
+function getLastNDates(endIso, n) {
   const dates = [];
-  for(let i = n - 1; i >= 0; i--){
+  for (let i = n - 1; i >= 0; i--) {
     dates.push(addDays(endIso, -i));
   }
   return dates;
 }
 
-function computeLast7Summary(state, endIso){
+function computeLast7Summary(state, endIso) {
   const dates = getLastNDates(endIso, 7);
   let workoutDays = 0;
   let totalWater = 0;
   let totalCalories = 0;
-  for(const d of dates){
+  for (const d of dates) {
     const e = getEntry(state, d);
-    if(e.workoutDone) workoutDays++;
+    if (e.workoutDone) workoutDays++;
     totalWater += Number(e.waterMl ?? 0);
     totalCalories += e.workoutDone ? Number(e.caloriesBurned ?? 0) : 0;
   }
@@ -134,33 +138,41 @@ function computeLast7Summary(state, endIso){
   };
 }
 
-function getWeightsSorted(state){
+function getWeightsSorted(state) {
   const keys = Object.keys(state.weights || {}).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
   keys.sort();
   return keys.map(k => ({ date: k, kg: Number(state.weights[k]) })).filter(x => Number.isFinite(x.kg));
 }
 
-function setWeight(state, isoDate, kg){
-  if(!state.weights || typeof state.weights !== 'object') state.weights = {};
+function setWeight(state, isoDate, kg) {
+  if (!state.weights || typeof state.weights !== 'object') state.weights = {};
   state.weights[isoDate] = Number(kg);
 }
 
-function computeChallengeProgress(state, asOfIso){
+function deleteWeight(state, isoDate) {
+  if (state.weights && state.weights[isoDate]) {
+    delete state.weights[isoDate];
+    return true;
+  }
+  return false;
+}
+
+function computeChallengeProgress(state, asOfIso) {
   const start = state.settings.challengeStart;
-  if(!start) return { active: false, dayIndex: 0, completedDays: 0, targetDays: 7 };
+  if (!start) return { active: false, dayIndex: 0, completedDays: 0, targetDays: 7 };
 
   const diffMs = parseISODateLocal(asOfIso) - parseISODateLocal(start);
-  const diffDays = Math.floor(diffMs / (24*60*60*1000));
+  const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
   const dayIndex = diffDays + 1; // 1-based
 
   const targetDays = 7;
   const effectiveDays = clamp(dayIndex, 0, targetDays);
 
   let completedDays = 0;
-  for(let i = 0; i < effectiveDays; i++){
+  for (let i = 0; i < effectiveDays; i++) {
     const d = addDays(start, i);
     const e = getEntry(state, d);
-    if(e.sugarCut) completedDays++;
+    if (e.sugarCut) completedDays++;
   }
 
   return {
@@ -227,15 +239,15 @@ let state = loadState();
 let selectedDate = toISODateLocal(new Date());
 let weightChartInstance = null;
 
-function setStatus(text){
+function setStatus(text) {
   els.saveStatus.textContent = text;
-  if(text){
+  if (text) {
     clearTimeout(setStatus._t);
     setStatus._t = setTimeout(() => { els.saveStatus.textContent = ''; }, 1500);
   }
 }
 
-function renderWater(entry){
+function renderWater(entry) {
   const goal = Math.max(0, Number(state.settings.waterGoalMl ?? 2000));
   const total = Math.max(0, Number(entry.waterMl ?? 0));
   els.waterTotal.textContent = `${total} ml`;
@@ -249,13 +261,13 @@ function renderWater(entry){
   els.waterRemainingText.textContent = `Remaining: ${remaining} ml`;
 }
 
-function renderLast7(endIso){
+function renderLast7(endIso) {
   const summary = computeLast7Summary(state, endIso);
   els.workoutCountValue.textContent = String(summary.workoutDays);
   els.avgWaterValue.textContent = String(summary.avgWater);
 
   els.last7Body.innerHTML = '';
-  for(const d of summary.dates){
+  for (const d of summary.dates) {
     const e = getEntry(state, d);
     const calories = e.workoutDone ? Number(e.caloriesBurned ?? 0) : 0;
     const tr = document.createElement('tr');
@@ -273,10 +285,10 @@ function renderLast7(endIso){
   }
 }
 
-function syncCaloriesUi(entry){
+function syncCaloriesUi(entry) {
   const workout = Boolean(entry.workoutDone);
   els.caloriesBurnedInput.disabled = !workout;
-  if(!workout){
+  if (!workout) {
     els.caloriesBurnedInput.value = '0';
     return;
   }
@@ -286,11 +298,11 @@ function syncCaloriesUi(entry){
   els.caloriesBurnedInput.value = String(normalized);
 }
 
-function renderWeights(){
+function renderWeights() {
   const weights = getWeightsSorted(state);
   els.weightEntriesValue.textContent = String(weights.length);
 
-  if(weights.length === 0){
+  if (weights.length === 0) {
     els.weightLatestValue.textContent = '—';
     els.weightLatestSub.textContent = 'kg';
     els.weightChangeValue.textContent = '—';
@@ -307,11 +319,14 @@ function renderWeights(){
   els.weightChangeValue.textContent = String(change);
 
   els.weightBody.innerHTML = '';
-  for(const w of weights.slice().reverse()){
+  for (const w of weights.slice().reverse()) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${w.date}</td>
       <td>${w.kg}</td>
+      <td style="text-align:right">
+        <button class="btn btn-secondary btn-mini" onclick="loadWeightToForm('${w.date}', ${w.kg})">Edit</button>
+      </td>
     `;
     els.weightBody.appendChild(tr);
   }
@@ -319,10 +334,10 @@ function renderWeights(){
   renderWeightChart(weights);
 }
 
-function ensureWeightChart(){
-  if(!els.weightChart) return null;
-  if(weightChartInstance) return weightChartInstance;
-  if(!window.Chart) return null;
+function ensureWeightChart() {
+  if (!els.weightChart) return null;
+  if (weightChartInstance) return weightChartInstance;
+  if (!window.Chart) return null;
 
   const ctx = els.weightChart.getContext('2d');
   weightChartInstance = new window.Chart(ctx, {
@@ -370,11 +385,11 @@ function ensureWeightChart(){
   return weightChartInstance;
 }
 
-function renderWeightChart(weights){
+function renderWeightChart(weights) {
   const chart = ensureWeightChart();
-  if(!chart) return;
+  if (!chart) return;
 
-  if(!weights || weights.length === 0){
+  if (!weights || weights.length === 0) {
     chart.data.labels = [];
     chart.data.datasets[0].data = [];
     chart.update();
@@ -390,22 +405,22 @@ function renderWeightChart(weights){
   chart.update();
 }
 
-function renderSugarProgress(asOfIso){
+function renderSugarProgress(asOfIso) {
   const streak = computeSugarStreak(state, asOfIso);
   els.sugarStreakValue.textContent = String(streak);
 
   const ch = computeChallengeProgress(state, asOfIso);
-  if(!ch.active){
+  if (!ch.active) {
     els.sugarStreakSub.textContent = 'days';
     return;
   }
 
-  if(ch.dayIndex <= 0){
+  if (ch.dayIndex <= 0) {
     els.sugarStreakSub.textContent = 'days (challenge not started yet)';
     return;
   }
 
-  if(ch.dayIndex > ch.targetDays){
+  if (ch.dayIndex > ch.targetDays) {
     els.sugarStreakSub.textContent = `days (challenge done: ${ch.completedDays}/${ch.targetDays})`;
     return;
   }
@@ -413,7 +428,7 @@ function renderSugarProgress(asOfIso){
   els.sugarStreakSub.textContent = `days (challenge day ${ch.dayIndex}/7, done ${ch.completedDays}/7)`;
 }
 
-function renderFormForDate(isoDate){
+function renderFormForDate(isoDate) {
   selectedDate = isoDate;
   const entry = getEntry(state, selectedDate);
 
@@ -435,7 +450,7 @@ function renderFormForDate(isoDate){
   renderWeights();
 }
 
-function persistCurrentForm(){
+function persistCurrentForm() {
   const entry = getEntry(state, selectedDate);
 
   entry.sugarCut = els.sugarCutInput.checked;
@@ -460,49 +475,49 @@ function persistCurrentForm(){
   renderLast7(selectedDate);
 }
 
-function hasDayEntry(state, isoDate){
+function hasDayEntry(state, isoDate) {
   return Boolean(state.entries && Object.prototype.hasOwnProperty.call(state.entries, isoDate));
 }
 
-function deleteDayEntry(isoDate){
-  if(!hasDayEntry(state, isoDate)){
+function deleteDayEntry(isoDate) {
+  if (!hasDayEntry(state, isoDate)) {
     setStatus('Nothing to delete');
     return;
   }
   const ok = confirm(`Delete saved record for ${isoDate}?`);
-  if(!ok) return;
+  if (!ok) return;
   delete state.entries[isoDate];
   saveState(state);
   renderFormForDate(isoDate);
   setStatus('Deleted');
 }
 
-function copyOrMoveDay({ fromDate, toDate, move }){
-  if(!fromDate || !toDate){
+function copyOrMoveDay({ fromDate, toDate, move }) {
+  if (!fromDate || !toDate) {
     setStatus('Pick a date');
     return;
   }
-  if(fromDate === toDate){
+  if (fromDate === toDate) {
     setStatus('Same date');
     return;
   }
-  if(!hasDayEntry(state, fromDate)){
+  if (!hasDayEntry(state, fromDate)) {
     setStatus('Nothing to copy');
     return;
   }
 
   const src = getEntry(state, fromDate);
   const destExists = hasDayEntry(state, toDate);
-  if(destExists){
+  if (destExists) {
     const okOverwrite = confirm(`A record already exists for ${toDate}. Overwrite it?`);
-    if(!okOverwrite) return;
+    if (!okOverwrite) return;
   }
 
   const next = { ...src };
   next.updatedAt = new Date().toISOString();
   setEntry(state, toDate, next);
 
-  if(move){
+  if (move) {
     delete state.entries[fromDate];
   }
 
@@ -511,22 +526,28 @@ function copyOrMoveDay({ fromDate, toDate, move }){
   setStatus(move ? 'Moved' : 'Copied');
 }
 
-function setWeightStatus(text){
+function setWeightStatus(text) {
   els.weightStatus.textContent = text;
-  if(text){
+  if (text) {
     clearTimeout(setWeightStatus._t);
     setWeightStatus._t = setTimeout(() => { els.weightStatus.textContent = ''; }, 1500);
   }
 }
 
-function saveWeightFromForm(){
+function loadWeightToForm(date, kg) {
+  els.weightDateInput.value = date;
+  els.weightKgInput.value = String(kg);
+  els.weightDateInput.scrollIntoView({ behavior: 'smooth' });
+}
+
+function saveWeightFromForm() {
   const date = String(els.weightDateInput.value || '');
   const kg = Number(els.weightKgInput.value);
-  if(!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)){
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     setWeightStatus('Pick a date');
     return;
   }
-  if(!Number.isFinite(kg) || kg <= 0){
+  if (!Number.isFinite(kg) || kg <= 0) {
     setWeightStatus('Enter weight');
     return;
   }
@@ -537,20 +558,32 @@ function saveWeightFromForm(){
   setWeightStatus('Saved');
 }
 
-function setActiveTab(tab){
-  for(const b of els.tabs){
+function deleteWeightFromForm() {
+  const date = String(els.weightDateInput.value || '');
+  if (!date) return;
+  if (confirm(`Delete weight entry for ${date}?`)) {
+    deleteWeight(state, date);
+    saveState(state);
+    renderWeights();
+    setWeightStatus('Deleted');
+    els.weightKgInput.value = '';
+  }
+}
+
+function setActiveTab(tab) {
+  for (const b of els.tabs) {
     b.classList.toggle('is-active', b.dataset.tab === tab);
   }
-  for(const p of els.panels){
+  for (const p of els.panels) {
     p.hidden = p.dataset.panel !== tab;
   }
 }
 
-function exportPdfReport(){
-  try{
+function exportPdfReport() {
+  try {
     const jspdfNS = window.jspdf;
     const JsPDF = jspdfNS?.jsPDF;
-    if(!JsPDF) throw new Error('jsPDF not loaded');
+    if (!JsPDF) throw new Error('jsPDF not loaded');
 
     const doc = new JsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -583,7 +616,7 @@ function exportPdfReport(){
     doc.setTextColor(0, 0, 0);
 
     let challengeLine = 'Challenge: not set';
-    if(ch.active){
+    if (ch.active) {
       challengeLine = `7-day sugar challenge start: ${state.settings.challengeStart || '-'} | done: ${ch.completedDays}/7`;
     }
     doc.setFont('helvetica', 'normal');
@@ -619,7 +652,7 @@ function exportPdfReport(){
     doc.text('Weight progress', 40, afterDailyY);
 
     const chart = ensureWeightChart();
-    if(chart && els.weightChart){
+    if (chart && els.weightChart) {
       // Ensure it is up-to-date for export.
       renderWeightChart(getWeightsSorted(state));
       const chartDataUrl = els.weightChart.toDataURL('image/png', 1.0);
@@ -650,12 +683,12 @@ function exportPdfReport(){
     doc.text('Generated by your personal tracker (local data).', 40, doc.internal.pageSize.getHeight() - 30);
 
     doc.save(`health-report-${selectedDate}.pdf`);
-  }catch{
+  } catch {
     setStatus('PDF export failed');
   }
 }
 
-function addWater(delta){
+function addWater(delta) {
   const entry = getEntry(state, selectedDate);
   entry.waterMl = Math.max(0, Number(entry.waterMl ?? 0) + delta);
   setEntry(state, selectedDate, entry);
@@ -664,7 +697,7 @@ function addWater(delta){
   renderLast7(selectedDate);
 }
 
-function clearWater(){
+function clearWater() {
   const entry = getEntry(state, selectedDate);
   entry.waterMl = 0;
   setEntry(state, selectedDate, entry);
@@ -676,7 +709,7 @@ function clearWater(){
 // Events
 els.dateInput.addEventListener('change', () => {
   const v = els.dateInput.value;
-  if(v) renderFormForDate(v);
+  if (v) renderFormForDate(v);
 });
 
 els.todayBtn.addEventListener('click', () => {
@@ -684,20 +717,20 @@ els.todayBtn.addEventListener('click', () => {
   renderFormForDate(today);
 });
 
-if(els.deleteDayBtn){
+if (els.deleteDayBtn) {
   els.deleteDayBtn.addEventListener('click', () => {
     deleteDayEntry(selectedDate);
   });
 }
 
-if(els.copyDayBtn && els.moveCopyDateInput){
+if (els.copyDayBtn && els.moveCopyDateInput) {
   els.copyDayBtn.addEventListener('click', () => {
     const toDate = String(els.moveCopyDateInput.value || '');
     copyOrMoveDay({ fromDate: selectedDate, toDate, move: false });
   });
 }
 
-if(els.moveDayBtn && els.moveCopyDateInput){
+if (els.moveDayBtn && els.moveCopyDateInput) {
   els.moveDayBtn.addEventListener('click', () => {
     const toDate = String(els.moveCopyDateInput.value || '');
     copyOrMoveDay({ fromDate: selectedDate, toDate, move: true });
@@ -708,7 +741,7 @@ els.last7Body.addEventListener('click', (ev) => {
   const editBtn = ev.target?.closest?.('[data-edit-date]');
   const tr = ev.target?.closest?.('tr[data-date]');
   const date = (editBtn && editBtn.getAttribute('data-edit-date')) || (tr && tr.dataset.date);
-  if(!date) return;
+  if (!date) return;
 
   setActiveTab('today');
   renderFormForDate(date);
@@ -754,11 +787,11 @@ els.exportPdfBtn.addEventListener('click', () => {
 
 els.importFile.addEventListener('change', async () => {
   const file = els.importFile.files?.[0];
-  if(!file) return;
-  try{
+  if (!file) return;
+  try {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    if(!parsed || typeof parsed !== 'object') throw new Error('Invalid file');
+    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid file');
 
     const merged = {
       settings: {
@@ -773,16 +806,16 @@ els.importFile.addEventListener('change', async () => {
     saveState(state);
     renderFormForDate(selectedDate);
     setStatus('Imported');
-  }catch{
+  } catch {
     setStatus('Import failed');
-  }finally{
+  } finally {
     els.importFile.value = '';
   }
 });
 
 els.resetBtn.addEventListener('click', () => {
   const ok = confirm('This will delete all saved data on this device. Continue?');
-  if(!ok) return;
+  if (!ok) return;
   localStorage.removeItem(STORAGE_KEY);
   state = loadState();
   renderFormForDate(toISODateLocal(new Date()));
@@ -793,7 +826,7 @@ els.saveWeightBtn.addEventListener('click', () => {
   saveWeightFromForm();
 });
 
-for(const b of els.tabs){
+for (const b of els.tabs) {
   b.addEventListener('click', () => {
     setActiveTab(b.dataset.tab);
   });
@@ -801,14 +834,14 @@ for(const b of els.tabs){
 
 // Init
 els.weightDateInput.value = toISODateLocal(new Date());
-if(els.moveCopyDateInput){
+if (els.moveCopyDateInput) {
   els.moveCopyDateInput.value = toISODateLocal(new Date());
 }
 renderFormForDate(selectedDate);
 setActiveTab('today');
 
-function updateLocalTime(){
-  if(!els.localTimeText) return;
+function updateLocalTime() {
+  if (!els.localTimeText) return;
   const now = new Date();
   const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   els.localTimeText.textContent = `Local time: ${time}`;
