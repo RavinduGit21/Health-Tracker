@@ -1,289 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Health Tracker - Web Sync</title>
-    <link rel="stylesheet" href="styles.css">
-    <!-- Supabase JS SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- jsPDF for reports -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="health_tracker">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>health_tracker</title>
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
-    <header class="app-header">
-        <div class="container">
-            <div class="header-row">
-                <div>
-                    <h1 class="app-title">Health Tracker</h1>
-                    <p id="localTimeText" class="app-subtitle">Loading...</p>
-                </div>
-                <div class="header-actions">
-                    <div id="authSection" style="display: flex; gap: 10px; align-items: center;">
-                        <input type="email" id="emailInput" placeholder="Email" class="btn" style="width: 150px; text-align: left;">
-                        <input type="password" id="passwordInput" placeholder="Password" class="btn" style="width: 120px; text-align: left;">
-                        <button id="loginBtn" class="btn btn-primary">Login</button>
-                    </div>
-                    <div id="userSection" style="display: none; align-items: center; gap: 10px;">
-                        <span id="userEmail" class="muted"></span>
-                        <button id="logoutBtn" class="btn btn-secondary btn-mini">Logout</button>
-                    </div>
-                    <button id="exportBtn" class="btn btn-secondary">Backup (JSON)</button>
-                </div>
-            </div>
-            <nav class="tabs">
-                <button class="tab is-active" data-tab="today">Today</button>
-                <button class="tab" data-tab="history">History</button>
-                <button class="tab" data-tab="weight">Weight Journey</button>
-            </nav>
-        </div>
-    </header>
-
-    <main class="container">
-        <!-- Dashboard Panel -->
-        <div data-panel="today">
-            <div class="grid grid-2">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row space-between">
-                            <h2>Daily Progress</h2>
-                            <div class="row gap-sm">
-                                <input type="date" id="dateInput" style="width: 150px;">
-                                <button id="todayBtn" class="btn btn-secondary btn-mini">Today</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="grid">
-                        <div class="stat">
-                            <div class="stat-label">Added Sugar Streak</div>
-                            <div id="sugarStreakValue" class="stat-value">0</div>
-                            <div id="sugarStreakSub" class="stat-sub">days</div>
-                        </div>
-
-                        <div class="panel">
-                            <h3>Hydration</h3>
-                            <div class="water-total">
-                                <div>
-                                    <div id="waterTotal" class="big">0 ml</div>
-                                    <div id="waterGoalHint" class="muted">Goal: 2000 ml</div>
-                                </div>
-                                <div class="water-actions">
-                                    <button id="add250Btn" class="btn btn-mini">+250</button>
-                                    <button id="add500Btn" class="btn btn-mini">+500</button>
-                                    <button id="add1000Btn" class="btn btn-mini">+1L</button>
-                                    <button id="clearWaterBtn" class="btn btn-danger btn-mini">Clear</button>
-                                </div>
-                            </div>
-                            <div class="progress">
-                                <div id="waterProgressBar" class="progress-bar"></div>
-                            </div>
-                            <div class="row space-between muted" style="margin-top:8px">
-                                <span id="waterProgressText">0%</span>
-                                <span id="waterRemainingText">Remaining: 2000 ml</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Daily Checks</h2>
-                    </div>
-                    <div class="grid">
-                        <label class="check">
-                            <input type="checkbox" id="sugarCutInput">
-                            <span>No Added Sugar Today</span>
-                        </label>
-                        <label class="check">
-                            <input type="checkbox" id="workoutDoneInput">
-                            <span>Workout Completed</span>
-                        </label>
-                        
-                        <div class="row gap-sm">
-                            <div class="field">
-                                <span class="label">Calories Burned</span>
-                                <input type="number" id="caloriesBurnedInput" value="0">
-                            </div>
-                        </div>
-
-                        <div class="field">
-                            <span class="label">Workout Notes</span>
-                            <textarea id="workoutNotesInput" rows="2"></textarea>
-                        </div>
-
-                        <div class="divider"></div>
-
-                        <div class="field">
-                            <span class="label">Daily Notes</span>
-                            <textarea id="notesInput" rows="2"></textarea>
-                        </div>
-
-                        <div class="row space-between" style="margin-top:10px">
-                            <div id="saveStatus" class="muted"></div>
-                            <div class="row gap-sm">
-                                <button id="deleteDayBtn" class="btn btn-danger">Delete Log</button>
-                                <button id="saveBtn" class="btn btn-primary" style="padding: 10px 24px;">SAVE RECORD</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Challenge Section -->
-            <div class="card">
-                <div class="card-header">
-                    <h2>Sugar Cut Challenge</h2>
-                </div>
-                <div class="grid grid-3">
-                    <div class="field">
-                        <span class="label">Challenge Start Date</span>
-                        <input type="date" id="challengeStartInput">
-                    </div>
-                    <div class="field">
-                        <span class="label">Daily Water Goal (ml)</span>
-                        <input type="number" id="waterGoalInput" value="2000">
-                    </div>
-                    <div style="display:flex; align-items:flex-end">
-                         <p class="muted">Challenge defaults to 7 days of "No Added Sugar".</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- History Panel -->
-        <div data-panel="history" hidden>
-            <div class="card">
-                <div class="card-header">
-                    <div class="row space-between">
-                        <h2>Last 7 Days</h2>
-                        <button id="exportPdfBtn" class="btn btn-primary">Generate PDF Report</button>
-                    </div>
-                </div>
-                <div class="grid">
-                     <div class="grid grid-2">
-                        <div class="stat">
-                            <div class="stat-label">Workouts (Last 7)</div>
-                            <div id="workoutCountValue" class="stat-value">0</div>
-                            <div class="stat-sub">days active</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-label">Avg Water (Last 7)</div>
-                            <div id="avgWaterValue" class="stat-value">0</div>
-                            <div class="stat-sub">ml per day</div>
-                        </div>
-                     </div>
-                </div>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Sugar Cut</th>
-                                <th>Workout</th>
-                                <th>Calories</th>
-                                <th>Water</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="last7Body"></tbody>
-                    </table>
-                </div>
-                <div class="grid">
-                    <div class="panel">
-                        <h3>Move or Copy Data</h3>
-                        <div class="row gap-sm row-wrap">
-                            <div class="field">
-                                <span class="label">Target Date</span>
-                                <input type="date" id="moveCopyDateInput">
-                            </div>
-                            <div class="row gap-sm" style="align-items:flex-end; padding-bottom:2px">
-                                <button id="copyDayBtn" class="btn">Copy Current to Target</button>
-                                <button id="moveDayBtn" class="btn">Move Current to Target</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Weight Panel -->
-        <div data-panel="weight" hidden>
-            <div class="grid grid-2">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Weight Log</h2>
-                    </div>
-                    <div class="grid">
-                        <div class="row gap-sm">
-                            <div class="field">
-                                <span class="label">Date</span>
-                                <input type="date" id="weightDateInput">
-                            </div>
-                            <div class="field">
-                                <span class="label">Weight (kg)</span>
-                                <input type="number" id="weightKgInput" step="0.1">
-                            </div>
-                        </div>
-                        <div class="row space-between" style="margin-top:10px">
-                            <div id="weightStatus" class="muted"></div>
-                            <button id="saveWeightBtn" class="btn btn-primary">Log Weight</button>
-                        </div>
-                    </div>
-                    <div class="table-wrap">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Weight (kg)</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="weightBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Weight Analytics</h2>
-                    </div>
-                    <div class="grid">
-                        <div class="grid grid-2">
-                            <div class="stat">
-                                <div class="stat-label">Latest Weight</div>
-                                <div id="weightLatestValue" class="stat-value">--</div>
-                                <div id="weightLatestSub" class="stat-sub">kg</div>
-                            </div>
-                            <div class="stat">
-                                <div class="stat-label">Total Change</div>
-                                <div id="weightChangeValue" class="stat-value">--</div>
-                                <div class="stat-sub">kg since first log</div>
-                            </div>
-                        </div>
-                        <div class="stat" style="margin-top:14px">
-                            <div class="stat-label">Entries Recorded</div>
-                            <div id="weightEntriesValue" class="stat-value">0</div>
-                        </div>
-                        
-                        <div class="chart-wrap">
-                            <canvas id="weightChart" height="250"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <footer class="footer">
-        <div class="container muted" style="text-align:center">
-            &copy; 2026 Personal Health Tracker • All data stored locally and synced via Supabase.
-        </div>
-    </footer>
-
-    <script src="app.js"></script>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
