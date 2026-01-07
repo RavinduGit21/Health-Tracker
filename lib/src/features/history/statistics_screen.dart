@@ -5,6 +5,7 @@ import 'package:health_tracker/src/features/dashboard/dashboard_repository.dart'
 import 'package:health_tracker/src/features/goals/goals_repository.dart';
 import 'package:health_tracker/src/utils/report_service.dart';
 import 'package:health_tracker/src/features/weight/weight_repository.dart';
+import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
 
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
@@ -22,12 +23,13 @@ class StatisticsScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             onPressed: () {
-               final logs = ref.read(allLogsProvider).value ?? [];
-               ReportService.generateAndPrintReport(
-                 dailyLogs: logs.take(7).toList(), 
-                 weightEntries: weightEntries, 
-                 goals: goalsState
-               );
+              final logs = ref.read(allLogsProvider).value ?? [];
+              final sleepLogs = ref.read(sleepRepositoryProvider).getAllLogs();
+              ReportService.generateAndShareReport(
+                dailyLogs: logs,
+                sleepLogs: sleepLogs,
+                weightLogs: weightEntries,
+              );
             },
           )
         ],

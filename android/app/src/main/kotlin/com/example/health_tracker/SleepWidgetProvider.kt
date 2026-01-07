@@ -19,9 +19,17 @@ class SleepWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         for (appWidgetId in appWidgetIds) {
-            val widgetData = context.getSharedPreferences("HomeWidgetPausedData", Context.MODE_PRIVATE)
-            val isSleeping = widgetData.getBoolean("is_sleeping", false)
-            val elapsedMillis = widgetData.getLong("elapsed_millis", 0L)
+            val widgetData = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
+            val fallbackData = context.getSharedPreferences("HomeWidgetPausedData", Context.MODE_PRIVATE)
+            val isSleeping = widgetData.getBoolean("is_sleeping", fallbackData.getBoolean("is_sleeping", false))
+
+            val elapsedRaw = widgetData.all["elapsed_millis"] ?: fallbackData.all["elapsed_millis"]
+            val elapsedMillis = when (elapsedRaw) {
+                is Int -> elapsedRaw.toLong()
+                is Long -> elapsedRaw
+                is String -> elapsedRaw.toLongOrNull() ?: 0L
+                else -> 0L
+            }
 
             val views = RemoteViews(context.packageName, R.layout.sleep_widget_layout).apply {
                 if (isSleeping) {

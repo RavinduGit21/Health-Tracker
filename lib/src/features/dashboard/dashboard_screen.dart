@@ -10,7 +10,7 @@ import 'package:health_tracker/src/features/nutrition/food_search_sheet.dart';
 import 'package:health_tracker/src/features/weight/weight_repository.dart';
 import 'package:health_tracker/src/features/weight/weight_screen.dart';
 import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
-
+import 'package:health_tracker/src/utils/report_service.dart';
 import 'package:health_tracker/src/features/authentication/auth_repository.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -63,6 +63,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () => _generateReport(ref),
+            tooltip: "Export PDF Report",
+          ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {
@@ -542,6 +547,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _generateReport(WidgetRef ref) async {
+    final dailyLogs = ref.read(allLogsProvider).value ?? [];
+    final sleepLogs = ref.read(sleepRepositoryProvider).getAllLogs();
+    final weightEntries = ref.read(weightRepositoryProvider).getAllEntries();
+
+    await ReportService.generateAndShareReport(
+      dailyLogs: dailyLogs,
+      sleepLogs: sleepLogs,
+      weightLogs: weightEntries,
     );
   }
 }

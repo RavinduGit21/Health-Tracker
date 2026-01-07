@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:alarm/alarm.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -17,6 +19,9 @@ class NotificationService {
   static const int _waterReminderBaseId = 2000;
   static const int _waterReminderCount = 12;
 
+  static const int _bedtimeAlarmId = 3000;
+  static const int _wakeAlarmId = 3001;
+
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -27,10 +32,13 @@ class NotificationService {
 
     tz_data.initializeTimeZones();
     try {
-      final localTz = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(localTz));
-    } catch (_) {
-      // Fall back to default timezone database location.
+      final String? localTz = await FlutterTimezone.getLocalTimezone();
+      if (localTz != null) {
+        tz.setLocalLocation(tz.getLocation(localTz));
+      }
+    } catch (e) {
+      debugPrint("Timezone initialization failed: $e. Falling back to UTC.");
+      tz.setLocalLocation(tz.UTC);
     }
 
     await flutterLocalNotificationsPlugin.initialize(
@@ -41,6 +49,32 @@ class NotificationService {
     );
 
     await _requestPermissionsIfNeeded();
+
+    final androidPlugin = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'sleep_alarms',
+          'Sleep Alarms',
+          description: 'Daily bedtime and wake-up alarms',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+        ),
+      );
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'water_reminders',
+          'Water Reminders',
+          description: 'Reminders to drink water',
+          importance: Importance.max,
+          playSound: true,
+        ),
+      );
+    } catch (_) {
+      // Ignore channel creation failures.
+    }
   }
 
   Future<void> _requestPermissionsIfNeeded() async {
@@ -132,6 +166,163 @@ class NotificationService {
   Future<void> recordWaterLoggedNow() async {
     final settings = Hive.box(_settingsBoxName);
     await settings.put(_lastWaterLogAtKey, DateTime.now().toIso8601String());
+  }
+
+  Future<void> scheduleBedtimeAlarm({required int hour, required int minute}) async {
+    await _scheduleDailyAlarm(
+      id: _bedtimeAlarmId,
+      hour: hour,
+      minute: minute,
+      title: 'Bedtime',
+      body: 'Time to go to sleep.',
+    );
+    
+    // Also set a proper ringing alarm if we have logic for it
+    await _setRingingAlarm(
+      id: _bedtimeAlarmId,
+      hour: hour,
+      minute: minute,
+      title: 'Bedtime',
+      body: 'Time to sleep!',
+    );
+  }
+
+  Future<void> cancelBedtimeAlarm() async {
+    await flutterLocalNotificationsPlugin.cancel(_bedtimeAlarmId);
+    if (!kIsWeb) await Alarm.stop(_bedtimeAlarmId);
+  }
+
+  Future<void> scheduleWakeAlarm({required int hour, required int minute}) async {
+    await _scheduleDailyAlarm(
+      id: _wakeAlarmId,
+      hour: hour,
+      minute: minute,
+      title: 'Wake up',
+      body: 'Good morning! Time to wake up.',
+    );
+
+    await _setRingingAlarm(
+      id: _wakeAlarmId,
+      hour: hour,
+      minute: minute,
+      title: 'Wake up',
+      body: 'Good morning!',
+    );
+  }
+
+  Future<void> cancelWakeAlarm() async {
+    await flutterLocalNotificationsPlugin.cancel(_wakeAlarmId);
+    if (!kIsWeb) await Alarm.stop(_wakeAlarmId);
+  }
+
+  static const String _alarmPath = 'assets/alarm.mp3';
+
+  Future<void> _setRingingAlarm({
+    required int id,
+    required int hour,
+    required int minute,
+    required String title,
+    required String body,
+  }) async {
+    final now = DateTime.now();
+    var scheduled = DateTime(now.year, now.month, now.day, hour, minute);
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    if (kIsWeb) return;
+
+    final alarmSettings = AlarmSettings(
+      id: id,
+      dateTime: scheduled,
+      assetAudioPath: _alarmPath,
+      loopAudio: true,
+      vibrate: true,
+      volume: 0.8,
+      fadeDuration: 3.0,
+      notificationSettings: NotificationSettings(
+        title: title,
+        body: body,
+        stopButton: 'Stop',
+      ),
+      androidFullScreenIntent: true,
+    );
+
+    try {
+      await Alarm.set(alarmSettings: alarmSettings);
+    } catch (e) {
+      debugPrint("Alarm package failed (likely missing assets/alarm.mp3): $e");
+      // If it fails, we still have the local notification as backup
+    }
+  }
+
+  Future<void> _scheduleDailyAlarm({
+    required int id,
+    required int hour,
+    required int minute,
+    required String title,
+    required String body,
+  }) async {
+    const androidDetails = AndroidNotificationDetails(
+      'sleep_alarms',
+      'Sleep Alarms',
+      channelDescription: 'Daily bedtime and wake-up alarms',
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: true,
+      playSound: true,
+      enableVibration: true,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      ongoing: true, // Makes it harder to dismiss accidentally
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      styleInformation: const BigTextStyleInformation(''),
+    );
+    const details = NotificationDetails(android: androidDetails);
+
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    AndroidScheduleMode scheduleMode = AndroidScheduleMode.alarmClock;
+    final androidPlugin = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      if (androidPlugin != null) {
+        final canExact = await androidPlugin.canScheduleExactNotifications() ?? false;
+        if (!canExact) {
+          await androidPlugin.requestExactAlarmsPermission();
+          // After requesting, we still might not have it until user returns,
+          // so we check again or just accept it might be inexact this time.
+          final nowCanExact = await androidPlugin.canScheduleExactNotifications() ?? false;
+          if (!nowCanExact) scheduleMode = AndroidScheduleMode.inexactAllowWhileIdle;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking/requesting exact alarm: $e");
+      scheduleMode = AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduled,
+      details,
+      androidScheduleMode: scheduleMode,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+
+    try {
+      final pending = await flutterLocalNotificationsPlugin.pendingNotificationRequests();
+      // Intentionally log for debugging alarm scheduling.
+      // ignore: avoid_print
+      print('Pending notifications count: ${pending.length}');
+    } catch (_) {
+      // Ignore
+    }
   }
 
   Future<void> _cancelWaterReminders() async {

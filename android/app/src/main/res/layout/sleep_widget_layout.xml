@@ -51,6 +51,8 @@
         android:text="START SLEEP"
         android:textColor="#FFFFFF"
         android:textSize="13sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:clickable="true"
+        android:focusable="true" />
 
 </LinearLayout>

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
@@ -69,9 +70,15 @@ class SleepRepository {
   final Box _box;
   final _supabase = Supabase.instance.client;
   RealtimeChannel? _sleepChannel;
+  StreamSubscription? _boxSubscription;
+  SleepLog? _lastWidgetActive;
+
+  static const Duration _maxUnfinishedSessionAge = Duration(hours: 20);
+  static const Duration _maxFutureSkew = Duration(minutes: 2);
 
   SleepRepository(this._box) {
     _initRealtime();
+    _initWidgetSync();
     _supabase.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.tokenRefreshed) {
         _initRealtime();
@@ -79,6 +86,23 @@ class SleepRepository {
         _sleepChannel?.unsubscribe();
         _sleepChannel = null;
       }
+    });
+  }
+
+  void _initWidgetSync() {
+    _boxSubscription?.cancel();
+    _lastWidgetActive = getActiveSession();
+    _boxSubscription = _box.watch().listen((_) async {
+      final active = getActiveSession();
+      final didChange = (_lastWidgetActive?.id != active?.id) ||
+          (_lastWidgetActive?.startTime != active?.startTime) ||
+          (_lastWidgetActive?.endTime != active?.endTime);
+      if (!didChange) return;
+      _lastWidgetActive = active;
+      await WidgetService.updateSleepWidget(
+        isSleeping: active != null,
+        startTime: active?.startTime,
+      );
     });
   }
 
@@ -130,7 +154,8 @@ class SleepRepository {
           await _box.delete(key);
         }
       }
-      
+
+      await _sanitizeStaleSessions();
       final active = getActiveSession();
       await WidgetService.updateSleepWidget(
         isSleeping: active != null,
@@ -149,9 +174,37 @@ class SleepRepository {
 
   SleepLog? getActiveSession() {
     try {
-      return getAllLogs().firstWhere((e) => e.endTime == null);
+      final now = DateTime.now();
+      return getAllLogs().firstWhere((e) {
+        if (e.endTime != null) return false;
+        if (e.startTime.isAfter(now.add(_maxFutureSkew))) return false;
+        if (now.difference(e.startTime) > _maxUnfinishedSessionAge) return false;
+        return true;
+      });
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<void> _sanitizeStaleSessions() async {
+    final now = DateTime.now();
+    final all = getAllLogs();
+    final stale = all.where((e) {
+      if (e.endTime != null) return false;
+      if (e.startTime.isAfter(now.add(_maxFutureSkew))) return true;
+      return now.difference(e.startTime) > _maxUnfinishedSessionAge;
+    }).toList();
+
+    for (final s in stale) {
+      final finished = SleepLog(
+        id: s.id,
+        startTime: s.startTime,
+        endTime: now,
+        qualityScore: 0,
+        moodAfterWake: s.moodAfterWake,
+        notes: s.notes,
+      );
+      await _saveLog(finished);
     }
   }
 
@@ -208,7 +261,12 @@ class SleepRepository {
     await _box.put(log.id, log.toMap());
     final user = _supabase.auth.currentUser;
     if (user != null) {
-      await _supabase.from('sleep_logs').upsert(log.toSupabase(user.id));
+      try {
+        await _supabase.from('sleep_logs').upsert(log.toSupabase(user.id));
+      } catch (e) {
+        // Keep local save as source of truth when offline.
+        print("Sleep sync failed: $e");
+      }
     }
   }
 
@@ -226,15 +284,31 @@ final sleepRepositoryProvider = Provider<SleepRepository>((ref) {
   return SleepRepository(box);
 });
 
-final sleepLogsProvider = StreamProvider.autoDispose<List<SleepLog>>((ref) async* {
+final sleepLogsProvider = StreamProvider.autoDispose<List<SleepLog>>((ref) {
   final repo = ref.watch(sleepRepositoryProvider);
   final box = Hive.box('sleep_logs');
-  
-  yield repo.getAllLogs();
-  
-  await for (final _ in box.watch()) {
-    yield repo.getAllLogs();
+
+  final controller = StreamController<List<SleepLog>>();
+
+  void emit() {
+    if (controller.isClosed) return;
+    controller.add(repo.getAllLogs());
   }
+
+  emit();
+
+  final boxSub = box.watch().listen((_) => emit());
+  // Fallback: widget background runs in a different isolate/engine;
+  // box.watch() may not fire across isolates on some devices.
+  final pollSub = Stream.periodic(const Duration(seconds: 2)).listen((_) => emit());
+
+  ref.onDispose(() {
+    boxSub.cancel();
+    pollSub.cancel();
+    controller.close();
+  });
+
+  return controller.stream;
 });
 
 final activeSleepSessionProvider = Provider.autoDispose<SleepLog?>((ref) {

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_tracker/src/constants/app_colors.dart';
 import 'package:health_tracker/src/features/dashboard/dashboard_repository.dart';
 import 'package:health_tracker/src/features/history/daily_detail_screen.dart';
+import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
+import 'package:health_tracker/src/features/weight/weight_repository.dart';
+import 'package:health_tracker/src/utils/report_service.dart';
 import 'package:intl/intl.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -15,6 +18,14 @@ class HistoryScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Tracking History"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () => _generateReport(ref),
+            tooltip: "Export PDF Report",
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: allLogsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -32,20 +43,41 @@ class HistoryScreen extends ConsumerWidget {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.05),
+                      gradient: LinearGradient(
+                        colors: [AppColors.primary.withOpacity(0.15), AppColors.secondary.withOpacity(0.05)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: AppColors.primary.withOpacity(0.1)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    child: Column(
                       children: [
-                        _buildSummaryStat("Days", totalDays.toString(), Icons.calendar_today, Colors.blue),
-                        _buildSummaryStat("Sugar Cut", sugarCutDays.toString(), Icons.block, Colors.pink),
-                        _buildSummaryStat("Workouts", workoutDays.toString(), Icons.fitness_center, Colors.green),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Health Summary", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            TextButton.icon(
+                              onPressed: () => _generateReport(ref),
+                              icon: const Icon(Icons.download, size: 16),
+                              label: const Text("GET REPORT", style: TextStyle(fontSize: 12)),
+                              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildSummaryStat("Days", totalDays.toString(), Icons.calendar_today, Colors.blue),
+                            _buildSummaryStat("Sugar Cut", sugarCutDays.toString(), Icons.block, Colors.pink),
+                            _buildSummaryStat("Workouts", workoutDays.toString(), Icons.fitness_center, Colors.green),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -79,6 +111,18 @@ class HistoryScreen extends ConsumerWidget {
         Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
       ],
+    );
+  }
+
+  Future<void> _generateReport(WidgetRef ref) async {
+    final dailyLogs = ref.read(allLogsProvider).value ?? [];
+    final sleepLogs = ref.read(sleepRepositoryProvider).getAllLogs();
+    final weightEntries = ref.read(weightRepositoryProvider).getAllEntries();
+
+    await ReportService.generateAndShareReport(
+      dailyLogs: dailyLogs,
+      sleepLogs: sleepLogs,
+      weightLogs: weightEntries,
     );
   }
 }

@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
 import 'package:health_tracker/src/features/goals/goals_repository.dart';
+import 'package:health_tracker/src/utils/notification_service.dart';
+import 'package:health_tracker/src/utils/widget_service.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
 class SleepScreen extends ConsumerStatefulWidget {
@@ -12,10 +17,39 @@ class SleepScreen extends ConsumerStatefulWidget {
 }
 
 class _SleepScreenState extends ConsumerState<SleepScreen> {
+  Timer? _ticker;
+  DateTime _now = DateTime.now();
+  ProviderSubscription<SleepLog?>? _activeSessionSub;
+
+  static const String _bedEnabledKey = 'sleep_bed_alarm_enabled';
+  static const String _bedTimeKey = 'sleep_bed_alarm_time';
+  static const String _wakeEnabledKey = 'sleep_wake_alarm_enabled';
+  static const String _wakeTimeKey = 'sleep_wake_alarm_time';
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() => ref.read(sleepRepositoryProvider).syncRemote());
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _now = DateTime.now();
+      });
+    });
+
+    _activeSessionSub = ref.listenManual<SleepLog?>(activeSleepSessionProvider, (prev, next) async {
+      await WidgetService.updateSleepWidget(
+        isSleeping: next != null,
+        startTime: next?.startTime,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _activeSessionSub?.close();
+    super.dispose();
   }
 
   @override
@@ -56,6 +90,8 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
                   child: Column(
                     children: [
                       _buildActiveSessionCard(activeSession, goals),
+                      const SizedBox(height: 20),
+                      _buildAlarmSection(),
                       const SizedBox(height: 30),
                       _buildHistorySection(logs),
                     ],
@@ -109,6 +145,13 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
               "Daily Goal: ${goals.sleepGoal} hours",
               style: TextStyle(color: Colors.white.withOpacity(0.6)),
             ),
+          if (isSleeping) ...[
+            const SizedBox(height: 8),
+            Text(
+              _formatDuration(_now.difference(session.startTime)),
+              style: const TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 22),
+            ),
+          ],
           const SizedBox(height: 32),
           ElevatedButton(
             onPressed: () => isSleeping ? _showWakeUpDialog(session) : _refStartSleep(),
@@ -138,7 +181,26 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
   }
 
   void _refStartSleep() async {
-    await ref.read(sleepRepositoryProvider).startSleep();
+    final repo = ref.read(sleepRepositoryProvider);
+    await repo.startSleep();
+    final active = repo.getActiveSession();
+    await WidgetService.updateSleepWidget(
+      isSleeping: active != null,
+      startTime: active?.startTime,
+    );
+  }
+
+  String _formatDuration(Duration d) {
+    if (d.isNegative) {
+      d = Duration.zero;
+    }
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   void _showWakeUpDialog(SleepLog? session) {
@@ -148,6 +210,154 @@ class _SleepScreenState extends ConsumerState<SleepScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => _WakeUpSheet(session: session),
     );
+  }
+
+  Widget _buildAlarmSection() {
+    final settings = Hive.box('settings');
+    return ValueListenableBuilder(
+      valueListenable: settings.listenable(keys: [_bedEnabledKey, _bedTimeKey, _wakeEnabledKey, _wakeTimeKey]),
+      builder: (context, Box box, _) {
+        final bedEnabled = (box.get(_bedEnabledKey, defaultValue: false) as bool?) ?? false;
+        final wakeEnabled = (box.get(_wakeEnabledKey, defaultValue: false) as bool?) ?? false;
+        final bedTime = _parseTimeOfDay(box.get(_bedTimeKey)) ?? const TimeOfDay(hour: 22, minute: 0);
+        final wakeTime = _parseTimeOfDay(box.get(_wakeTimeKey)) ?? const TimeOfDay(hour: 6, minute: 0);
+
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Alarms',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildAlarmRow(
+                title: 'Bedtime alarm',
+                enabled: bedEnabled,
+                time: bedTime,
+                onToggle: (v) async {
+                  await settings.put(_bedEnabledKey, v);
+                  if (v) {
+                    await NotificationService().scheduleBedtimeAlarm(hour: bedTime.hour, minute: bedTime.minute);
+                    _showNextAlarmInfo('Bedtime alarm', bedTime);
+                  } else {
+                    await NotificationService().cancelBedtimeAlarm();
+                  }
+                },
+                onPickTime: () async {
+                  final picked = await showTimePicker(context: context, initialTime: bedTime);
+                  if (picked == null) return;
+                  await settings.put(_bedTimeKey, _formatTimeKey(picked));
+                  if (bedEnabled) {
+                    await NotificationService().scheduleBedtimeAlarm(hour: picked.hour, minute: picked.minute);
+                    _showNextAlarmInfo('Bedtime alarm', picked);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildAlarmRow(
+                title: 'Wake-up alarm',
+                enabled: wakeEnabled,
+                time: wakeTime,
+                onToggle: (v) async {
+                  await settings.put(_wakeEnabledKey, v);
+                  if (v) {
+                    await NotificationService().scheduleWakeAlarm(hour: wakeTime.hour, minute: wakeTime.minute);
+                    _showNextAlarmInfo('Wake-up alarm', wakeTime);
+                  } else {
+                    await NotificationService().cancelWakeAlarm();
+                  }
+                },
+                onPickTime: () async {
+                  final picked = await showTimePicker(context: context, initialTime: wakeTime);
+                  if (picked == null) return;
+                  await settings.put(_wakeTimeKey, _formatTimeKey(picked));
+                  if (wakeEnabled) {
+                    await NotificationService().scheduleWakeAlarm(hour: picked.hour, minute: picked.minute);
+                    _showNextAlarmInfo('Wake-up alarm', picked);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showNextAlarmInfo(String label, TimeOfDay time) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    var next = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+    if (!next.isAfter(now)) {
+      next = next.add(const Duration(days: 1));
+    }
+    final when = DateFormat('EEE, MMM d • h:mm a').format(next);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label scheduled for $when')),
+    );
+  }
+
+  Widget _buildAlarmRow({
+    required String title,
+    required bool enabled,
+    required TimeOfDay time,
+    required ValueChanged<bool> onToggle,
+    required VoidCallback onPickTime,
+  }) {
+    final formatted = MaterialLocalizations.of(context).formatTimeOfDay(time);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                InkWell(
+                  onTap: onPickTime,
+                  child: Text(
+                    formatted,
+                    style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: enabled,
+            onChanged: onToggle,
+            activeColor: Colors.indigoAccent,
+          ),
+        ],
+      ),
+    );
+  }
+
+  TimeOfDay? _parseTimeOfDay(dynamic raw) {
+    if (raw is! String || raw.isEmpty) return null;
+    final parts = raw.split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _formatTimeKey(TimeOfDay t) {
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _buildHistorySection(List<SleepLog> logs) {
@@ -273,6 +483,7 @@ class _WakeUpSheetState extends ConsumerState<_WakeUpSheet> {
   final TextEditingController _notesController = TextEditingController();
   late DateTime _wakeTime;
   DateTime? _manualStart;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -363,14 +574,20 @@ class _WakeUpSheetState extends ConsumerState<_WakeUpSheet> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _save,
+                onPressed: _isSaving ? null : _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigoAccent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text("CONTINUE", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text("CONTINUE", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -477,14 +694,33 @@ class _WakeUpSheetState extends ConsumerState<_WakeUpSheet> {
   }
 
   void _save() async {
-    final repo = ref.read(sleepRepositoryProvider);
-    await repo.endSleep(
-      qualityScore: _quality,
-      mood: _mood,
-      notes: _notesController.text,
-      endTime: _wakeTime,
-      manualStartTime: _manualStart,
-    );
-    if (mounted) Navigator.pop(context);
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final repo = ref.read(sleepRepositoryProvider);
+      await repo.endSleep(
+        qualityScore: _quality,
+        mood: _mood,
+        notes: _notesController.text,
+        endTime: _wakeTime,
+        manualStartTime: _manualStart,
+      );
+      final active = repo.getActiveSession();
+      await WidgetService.updateSleepWidget(
+        isSleeping: active != null,
+        startTime: active?.startTime,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save sleep log: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 }

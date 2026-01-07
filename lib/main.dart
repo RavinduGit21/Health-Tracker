@@ -14,9 +14,16 @@ import 'package:health_tracker/src/constants/supabase_config.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:health_tracker/src/utils/widget_service.dart';
 import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
+import 'package:alarm/alarm.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  if (!kIsWeb) {
+    await Alarm.init();
+    // Register Home Widget background callback ASAP
+    HomeWidget.registerBackgroundCallback(homeWidgetBackgroundCallback);
+  }
   
   // Initialize Supabase
   await Supabase.initialize(
@@ -35,26 +42,6 @@ void main() async {
   final sharedPreferences = await SharedPreferences.getInstance();
   await NotificationService().init();
 
-  // Sync Data to Widget & Schedule Reminders
-  final dailyLogRepo = DailyLogRepository(Hive.box('daily_logs'));
-  await dailyLogRepo.updateWidgetWithCurrentData();
-  
-  final settingsBox = Hive.box('settings');
-  final todayLog = dailyLogRepo.getTodayLog();
-  await NotificationService().scheduleWaterReminders(
-    currentIntake: todayLog.waterIntake,
-    goal: settingsBox.get('water_goal', defaultValue: 2000),
-    unit: 'mL',
-  );
-
-  // Home Widget Setup
-  HomeWidget.registerBackgroundCallback(WidgetService.backgroundCallback);
-  final activeSleep = SleepRepository(Hive.box('sleep_logs')).getActiveSession();
-  await WidgetService.updateSleepWidget(
-    isSleeping: activeSleep != null,
-    startTime: activeSleep?.startTime,
-  );
-
   runApp(
     ProviderScope(
       overrides: [
@@ -65,6 +52,37 @@ void main() async {
       child: const HealthTrackerApp(),
     ),
   );
+
+  // Perform post-startup initializations without blocking the UI
+  _performPostStartupTasks(sharedPreferences);
+}
+
+void _performPostStartupTasks(SharedPreferences sharedPreferences) async {
+  try {
+    final settingsBox = Hive.box('settings');
+    final dailyLogRepo = DailyLogRepository(Hive.box('daily_logs'));
+    final todayLog = dailyLogRepo.getTodayLog();
+
+    if (!kIsWeb) {
+      // Sync Data to Widget & Schedule Reminders
+      dailyLogRepo.updateWidgetWithCurrentData();
+      
+      NotificationService().scheduleWaterReminders(
+        currentIntake: todayLog.waterIntake,
+        goal: settingsBox.get('water_goal', defaultValue: 2000),
+        unit: 'mL',
+      );
+
+      // Home Widget Update (Safe to Do in background)
+      final activeSleep = SleepRepository(Hive.box('sleep_logs')).getActiveSession();
+      WidgetService.updateSleepWidget(
+        isSleeping: activeSleep != null,
+        startTime: activeSleep?.startTime,
+      );
+    }
+  } catch (e) {
+    debugPrint("Post-startup tasks failed: $e");
+  }
 }
 
 class HealthTrackerApp extends ConsumerWidget {
