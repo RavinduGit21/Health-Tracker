@@ -47,17 +47,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Today's Health"),
+            const Flexible(
+              child: Text("Today's Health", overflow: TextOverflow.ellipsis),
+            ),
             if (isAdmin) ...[
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
                   color: Colors.amber,
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text("ADMIN", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+                child: const Text("ADMIN", style: TextStyle(fontSize: 8, color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ],
           ],
@@ -69,24 +72,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             tooltip: "Export PDF Report",
           ),
           IconButton(
-            icon: const Icon(Icons.sync),
-            onPressed: () {
-              ref.read(dailyLogRepositoryProvider).syncRemote();
-              ref.read(weightRepositoryProvider).syncRemote();
-              ref.read(sleepRepositoryProvider).syncRemote();
-               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Syncing with cloud...")));
-            },
-          ),
-          IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/goals'),
+            tooltip: "Settings",
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authRepositoryProvider).signOut();
-              if (mounted) context.go('/login');
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) async {
+              if (value == 'sync') {
+                ref.read(dailyLogRepositoryProvider).syncRemote();
+                ref.read(weightRepositoryProvider).syncRemote();
+                ref.read(sleepRepositoryProvider).syncRemote();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Syncing with cloud...")));
+              } else if (value == 'logout') {
+                await ref.read(authRepositoryProvider).signOut();
+                if (mounted) context.go('/login');
+              }
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'sync',
+                child: Row(
+                  children: [
+                    Icon(Icons.sync, size: 20),
+                    SizedBox(width: 12),
+                    Text("Sync Now"),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, size: 20, color: Colors.redAccent),
+                    SizedBox(width: 12),
+                    Text("Logout", style: TextStyle(color: Colors.redAccent)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

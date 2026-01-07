@@ -5,6 +5,7 @@ import 'package:health_tracker/src/features/dashboard/dashboard_repository.dart'
 import 'package:health_tracker/src/features/history/daily_detail_screen.dart';
 import 'package:health_tracker/src/features/sleep/sleep_repository.dart';
 import 'package:health_tracker/src/features/weight/weight_repository.dart';
+import 'package:health_tracker/src/utils/data_import_service.dart';
 import 'package:health_tracker/src/utils/report_service.dart';
 import 'package:intl/intl.dart';
 
@@ -58,14 +59,24 @@ class HistoryScreen extends ConsumerWidget {
                     child: Column(
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text("Health Summary", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            TextButton.icon(
+                            const Expanded(
+                              child: Text("Health Summary", 
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => _importHistoricalData(context, ref),
+                              icon: const Icon(Icons.upload_file, size: 20, color: Colors.orangeAccent),
+                              tooltip: "Import Data",
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            IconButton(
                               onPressed: () => _generateReport(ref),
-                              icon: const Icon(Icons.download, size: 16),
-                              label: const Text("GET REPORT", style: TextStyle(fontSize: 12)),
-                              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                              icon: const Icon(Icons.picture_as_pdf, size: 20, color: AppColors.primary),
+                              tooltip: "PDF Report",
+                              visualDensity: VisualDensity.compact,
                             ),
                           ],
                         ),
@@ -112,6 +123,16 @@ class HistoryScreen extends ConsumerWidget {
         Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
       ],
     );
+  }
+
+  Future<void> _importHistoricalData(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(dailyLogRepositoryProvider);
+    await DataImportService.importSpreadsheetData(repo);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Spreadsheet data imported successfully!")),
+      );
+    }
   }
 
   Future<void> _generateReport(WidgetRef ref) async {
